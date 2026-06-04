@@ -16,30 +16,15 @@
 
 ## Tunnel
 
-- 在 Cloudflare Zero Trust 中创建一个 remotely managed tunnel。
-- 使用 `.env` 中的 token 安装并运行 tunnel。
-- 添加这个 public hostname：
+- 使用 `cloudflared` CLI 创建 tunnel。
+- 详细步骤见 `docs/create-cloudflare-tunnel.md`。
+- 推荐只配置一个通配入口：
 
   ```text
   *.example.com -> http://traefik:80
   ```
 
 - 不要开放路由器的 80 或 443 入站端口。
-
-## Access 策略
-
-暴露私有主机名前，先创建 Access applications。
-
-推荐策略：
-
-```text
-test-*.example.com     需要登录
-traefik.example.com    需要登录
-grafana.example.com    需要登录
-admin.example.com      需要登录
-```
-
-如果 `blog.example.com` 这类生产服务本来就是面向公网的，可以不加 Access。
 
 ## 冒烟测试
 
@@ -53,7 +38,7 @@ curl -I https://test-api.example.com
 预期结果：
 
 - 公开生产服务返回业务响应。
-- 测试或私有服务跳转到 Cloudflare Access 登录，或要求登录后访问。
+- 测试服务返回对应测试服务响应。
 - 路由器入站端口保持关闭。
 
 ## 限制说明

@@ -1,5 +1,6 @@
 .env
 cloudflared/*.json
+cloudflared/config.yml
 letsencrypt/
 traefik/acme.json
 .DS_Store

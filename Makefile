@@ -1,9 +1,6 @@
 COMPOSE=docker compose
 
-.PHONY: bootstrap test up down demo config logs ps
-
-bootstrap:
-	./scripts/bootstrap.sh
+.PHONY: test up down demo config logs ps
 
 test:
 	./scripts/test.sh

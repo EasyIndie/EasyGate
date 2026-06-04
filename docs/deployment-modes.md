@@ -69,7 +69,7 @@ http:
 
 - 路由冲突或配置覆盖。
 - 请求被分发到没有对应服务的设备。
-- 多台设备使用同一个 tunnel token 时，Cloudflare 可能把它们当作同一个 tunnel 的多个 connector，从而形成负载均衡效果；这只适合同构副本，不适合每台设备承载不同服务。
+- 多台设备使用同一个 tunnel 凭据时，Cloudflare 可能把它们当作同一个 tunnel 的多个 connector，从而形成负载均衡效果；这只适合同构副本，不适合每台设备承载不同服务。
 - 排查故障时很难判断请求最终落到了哪台设备。
 
 Docker 网络名和容器名只在单台设备内生效，所以它们本身不会跨设备冲突。真正需要避免的是 Cloudflare hostname 和 tunnel 路由冲突。

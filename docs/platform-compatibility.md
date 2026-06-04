@@ -10,9 +10,11 @@ EasyGate 的 Docker Compose 项目可以兼容：
 
 推荐部署方式：
 
-- macOS：Docker Desktop + `scripts/bootstrap.sh`
-- Linux：Docker Engine + Docker Compose 插件 + `scripts/bootstrap.sh`
-- Windows 11：Docker Desktop + WSL2 后端 + `scripts/bootstrap.ps1`
+- macOS：Docker Desktop + `cloudflared` CLI + `make up`
+- Linux：Docker Engine + Docker Compose 插件 + `cloudflared` CLI + `make up`
+- Windows 11：Docker Desktop + WSL2 后端 + `cloudflared` CLI + PowerShell
+
+Tunnel 创建步骤见 `docs/create-cloudflare-tunnel.md`。
 
 ## macOS
 
@@ -25,7 +27,7 @@ EasyGate 的 Docker Compose 项目可以兼容：
 运行：
 
 ```sh
-./scripts/bootstrap.sh
+make up
 ```
 
 ## Linux
@@ -39,7 +41,7 @@ EasyGate 的 Docker Compose 项目可以兼容：
 运行：
 
 ```sh
-./scripts/bootstrap.sh
+make up
 ```
 
 如果使用普通用户运行 Docker，需要确保当前用户有权限访问 Docker daemon。
@@ -55,20 +57,20 @@ EasyGate 的 Docker Compose 项目可以兼容：
 运行：
 
 ```powershell
-.\scripts\bootstrap.ps1
+docker compose up -d
 ```
 
 如果 PowerShell 阻止脚本执行，可以在当前会话中临时允许：
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\scripts\bootstrap.ps1
+.\scripts\test.ps1
 ```
 
 也可以在 WSL2 发行版中使用 Linux 方式运行：
 
 ```sh
-./scripts/bootstrap.sh
+make up
 ```
 
 ## Windows 11 注意事项
@@ -78,9 +80,8 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 - 当前 Compose 模板使用 `/var/run/docker.sock` 让 Traefik 读取 Docker 事件。Docker Desktop 的 Linux containers 模式可以支持这个用法。
 - 如果使用 Windows containers，本项目不作为目标支持。
 
-## 脚本兼容性
+## 测试脚本兼容性
 
-- `scripts/bootstrap.sh`：面向 macOS、Linux、WSL2。
-- `scripts/bootstrap.ps1`：面向 Windows 11 PowerShell。
-- 两个脚本都不会覆盖已有 `.env`。
-- 两个脚本都会检查 Docker Compose、校验 `.env`、启动核心服务，并可选启动演示服务。
+- `scripts/test.sh`：面向 macOS、Linux、WSL2。
+- `scripts/test.ps1`：面向 Windows 11 PowerShell。
+- 两个脚本都会检查关键文件、脚本语法、配置命名和文档链接。

@@ -73,6 +73,21 @@ dig +trace example.com
 
 也可以回到 Cloudflare 控制台点击检查 nameserver。
 
+## 是否删除百度云解析记录
+
+切换到 Cloudflare nameserver 后，百度云上的原 DNS 解析记录通常不会再作为权威解析生效。此时真正对外生效的是 Cloudflare DNS 中的记录。
+
+但不建议立刻删除百度云上的原解析记录。推荐做法：
+
+1. 切换 nameserver 后，先保留百度云原解析记录。
+2. 在 Cloudflare 中确认所有记录都已完整迁移。
+3. 验证网站、API、邮件、证书和 EasyGate 服务都正常。
+4. 稳定运行一段时间后，再清理百度云上的旧解析记录。
+
+保留原记录的好处是方便回滚：如果切换后发现邮件、业务域名或某些子域名异常，可以把 nameserver 改回百度云，并快速恢复到原解析状态。
+
+如果确认以后不会回滚，也可以删除百度云上的旧解析记录，减少误操作和维护成本。删除前务必确认 Cloudflare DNS 已经包含所有必要记录，尤其是 `MX`、SPF、DKIM、DMARC 等邮件相关记录。
+
 ## 切换后配置 EasyGate
 
 1. 在 Cloudflare 确认 Universal SSL 已开启。
@@ -83,20 +98,16 @@ dig +trace example.com
    *.example.com -> http://traefik:80
    ```
 
-4. 配置 Cloudflare Access：
+4. 按 `docs/create-cloudflare-tunnel.md` 创建 tunnel，并配置通配入口：
 
    ```text
-   test-*.example.com
-   traefik.example.com
-   admin.example.com
-   grafana.example.com
+   *.example.com -> http://traefik:80
    ```
 
 5. 在 `.env` 中填入：
 
    ```text
    BASE_DOMAIN=example.com
-   CLOUDFLARE_TUNNEL_TOKEN=...
    TRAEFIK_DASHBOARD_HOST=traefik.example.com
    ```
 
@@ -107,7 +118,7 @@ dig +trace example.com
 - Cloudflare DNS 中保留了所有必要记录。
 - 邮件收发正常，尤其是 `MX`、SPF、DKIM、DMARC。
 - `https://api.example.com` 可以访问。
-- `https://test-api.example.com` 受到 Cloudflare Access 保护。
+- `https://test-api.example.com` 可以访问测试服务。
 - 家庭路由器没有开放 80/443 入站端口。
 
 ## 回滚方式

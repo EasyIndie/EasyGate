@@ -1,0 +1,12 @@
+# 复制为 cloudflared/config.yml 后使用。
+# tunnel 可以填写 tunnel 名称或 UUID。
+tunnel: easygate-home
+
+# cloudflared tunnel create 会生成 <TUNNEL_ID>.json。
+# 把该文件放到 cloudflared/ 目录，并在这里填写容器内路径。
+credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  - hostname: "*.example.com"
+    service: http://traefik:80
+  - service: http_status:404

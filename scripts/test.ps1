@@ -27,8 +27,7 @@ Write-Info "检查关键文件"
   "docker-compose.yml",
   "traefik/traefik.yml",
   "traefik/dynamic/localhost-services.yml",
-  "scripts/bootstrap.sh",
-  "scripts/bootstrap.ps1",
+  "cloudflared/config.yml.example",
   "scripts/test.sh",
   "scripts/test.ps1"
 ) | ForEach-Object { Require-File $_ }
@@ -44,13 +43,6 @@ if ($OldNameMatches) {
 }
 
 Write-Info "检查 PowerShell 脚本语法"
-$ParseErrors = $null
-$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/bootstrap.ps1), [ref]$ParseErrors)
-if ($ParseErrors) {
-  $ParseErrors | Format-List
-  Fail "bootstrap.ps1 存在语法错误"
-}
-
 $ParseErrors = $null
 $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/test.ps1), [ref]$ParseErrors)
 if ($ParseErrors) {
@@ -73,9 +65,6 @@ Get-Content .env.example | ForEach-Object {
 
 if (-not $ExampleEnv.ContainsKey("BASE_DOMAIN") -or $ExampleEnv["BASE_DOMAIN"] -ne "example.com") {
   Fail ".env.example 缺少 BASE_DOMAIN 默认值"
-}
-if (-not $ExampleEnv.ContainsKey("CLOUDFLARE_TUNNEL_TOKEN") -or $ExampleEnv["CLOUDFLARE_TUNNEL_TOKEN"] -ne "replace-with-cloudflare-tunnel-token") {
-  Fail ".env.example 缺少 tunnel token 占位符"
 }
 if (-not $ExampleEnv.ContainsKey("TRAEFIK_DASHBOARD_HOST") -or $ExampleEnv["TRAEFIK_DASHBOARD_HOST"] -ne "traefik.example.com") {
   Fail ".env.example 缺少 dashboard host 默认值"

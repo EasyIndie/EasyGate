@@ -28,9 +28,11 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: easygate-cloudflared
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    command: tunnel --config /etc/cloudflared/config.yml run
     networks:
       - easygate-proxy
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
     depends_on:
       - traefik
 

@@ -27,8 +27,9 @@ require_file ".env.example"
 require_file "docker-compose.yml"
 require_file "traefik/traefik.yml"
 require_file "traefik/dynamic/localhost-services.yml"
-require_file "scripts/bootstrap.sh"
-require_file "scripts/bootstrap.ps1"
+require_file "cloudflared/config.yml.example"
+require_file "scripts/test.sh"
+require_file "scripts/test.ps1"
 
 info "检查旧项目名残留"
 if grep -R "[E]asyTLS\|[e]asytls\|[E]ASYTLS" \
@@ -39,12 +40,10 @@ if grep -R "[E]asyTLS\|[e]asytls\|[E]ASYTLS" \
 fi
 
 info "检查 Bash 脚本语法"
-bash -n scripts/bootstrap.sh
 bash -n scripts/test.sh
 
 info "检查 .env.example 默认值"
 grep -q "^BASE_DOMAIN=example.com$" .env.example || fail ".env.example 缺少 BASE_DOMAIN 默认值"
-grep -q "^CLOUDFLARE_TUNNEL_TOKEN=replace-with-cloudflare-tunnel-token$" .env.example || fail ".env.example 缺少 tunnel token 占位符"
 grep -q "^TRAEFIK_DASHBOARD_HOST=traefik.example.com$" .env.example || fail ".env.example 缺少 dashboard host 默认值"
 
 info "检查 Traefik 网络命名"
@@ -63,6 +62,7 @@ if command -v ruby >/dev/null 2>&1; then
     docker-compose.yml \
     traefik/traefik.yml \
     traefik/dynamic/localhost-services.yml \
+    cloudflared/config.yml.example \
     examples/docker-service.compose.yml
 else
   warn "未找到 ruby，跳过 YAML 解析检查"
@@ -77,7 +77,7 @@ fi
 
 if command -v pwsh >/dev/null 2>&1; then
   info "检查 PowerShell 脚本语法"
-  pwsh -NoProfile -Command '$errors = $null; $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/bootstrap.ps1), [ref]$errors); if ($errors) { $errors | Format-List; exit 1 }'
+  pwsh -NoProfile -Command '$errors = $null; $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/test.ps1), [ref]$errors); if ($errors) { $errors | Format-List; exit 1 }'
 else
   warn "未找到 pwsh，跳过 PowerShell 语法检查"
 fi
