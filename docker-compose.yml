@@ -37,7 +37,7 @@ services:
       - traefik
 
   demo-api:
-    image: traefik/whoami:v1.10
+    image: traefik/whoami:v1.11
     profiles: ["demo"]
     restart: unless-stopped
     networks:
@@ -50,7 +50,7 @@ services:
       - traefik.http.services.demo-api.loadbalancer.server.port=80
 
   demo-test-api:
-    image: traefik/whoami:v1.10
+    image: traefik/whoami:v1.11
     profiles: ["demo"]
     restart: unless-stopped
     networks:
