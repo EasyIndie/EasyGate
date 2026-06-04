@@ -109,6 +109,8 @@ make logs    # 查看 Traefik 和 cloudflared 日志
 make ps      # 查看容器状态
 make demo    # 启动演示服务
 make down    # 停止服务
+make cleanup # 清理容器和网络，保留本地配置
+make purge   # 删除本地生成配置和 tunnel 凭据
 make test    # 运行测试
 ```
 
@@ -226,6 +228,7 @@ GitHub Actions 会在 Ubuntu、macOS、Windows 上运行 CI，防止脚本、Com
 - [Cloudflare 配置清单](docs/cloudflare-checklist.md)
 - [创建 Cloudflare Tunnel](docs/create-cloudflare-tunnel.md)
 - [Cloudflare Free 限制说明](docs/cloudflare-free-limits.md)
+- [清理部署](docs/cleanup.md)
 - [部署模式](docs/deployment-modes.md)
 - [平台兼容性](docs/platform-compatibility.md)
 - [与已有 nginx 共存](docs/nginx-compatibility.md)

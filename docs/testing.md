@@ -31,6 +31,7 @@ Windows 11 PowerShell：
 - YAML 配置语法。
 - Docker Compose 配置是否能渲染。
 - PowerShell 测试脚本语法。
+- 清理脚本语法。
 
 ## 可选依赖
 

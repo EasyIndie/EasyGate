@@ -30,6 +30,8 @@ require_file "traefik/dynamic/localhost-services.yml"
 require_file "cloudflared/config.yml.example"
 require_file "scripts/test.sh"
 require_file "scripts/test.ps1"
+require_file "scripts/cleanup.sh"
+require_file "scripts/cleanup.ps1"
 
 info "检查旧项目名残留"
 if grep -R "[E]asyTLS\|[e]asytls\|[E]ASYTLS" \
@@ -41,6 +43,7 @@ fi
 
 info "检查 Bash 脚本语法"
 bash -n scripts/test.sh
+bash -n scripts/cleanup.sh
 
 info "检查 .env.example 默认值"
 grep -q "^BASE_DOMAIN=example.com$" .env.example || fail ".env.example 缺少 BASE_DOMAIN 默认值"
@@ -78,6 +81,7 @@ fi
 if command -v pwsh >/dev/null 2>&1; then
   info "检查 PowerShell 脚本语法"
   pwsh -NoProfile -Command '$errors = $null; $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/test.ps1), [ref]$errors); if ($errors) { $errors | Format-List; exit 1 }'
+  pwsh -NoProfile -Command '$errors = $null; $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/cleanup.ps1), [ref]$errors); if ($errors) { $errors | Format-List; exit 1 }'
 else
   warn "未找到 pwsh，跳过 PowerShell 语法检查"
 fi

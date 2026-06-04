@@ -1,6 +1,6 @@
 COMPOSE=docker compose
 
-.PHONY: test up down demo config logs ps
+.PHONY: test up down cleanup purge demo config logs ps
 
 test:
 	./scripts/test.sh
@@ -10,6 +10,12 @@ up:
 
 down:
 	$(COMPOSE) down
+
+cleanup:
+	./scripts/cleanup.sh
+
+purge:
+	./scripts/cleanup.sh --purge
 
 demo:
 	$(COMPOSE) --profile demo up -d
