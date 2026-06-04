@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASE_DOMAIN="${BASE_DOMAIN:-}"
 TUNNEL_NAME="${TUNNEL_NAME:-easygate-home}"
 DASHBOARD_HOST="${TRAEFIK_DASHBOARD_HOST:-}"
+TRAEFIK_HTTP_PORT="${TRAEFIK_HTTP_PORT:-18080}"
 ROUTE_DNS=true
 START_DEMO=false
 
@@ -29,6 +30,7 @@ usage() {
   --domain <domain>       主域名，例如 example.com
   --tunnel <name>         tunnel 名称，默认 easygate-home
   --dashboard <hostname>  Traefik dashboard 域名，默认 traefik.<domain>
+  --port <port>           Traefik 宿主机本地调试端口，默认 18080
   --skip-route            不自动创建 *.domain 的 DNS 路由
   --demo                  部署后启动演示服务
   -h, --help              显示帮助
@@ -70,6 +72,10 @@ for arg in "$@"; do
     --dashboard)
       shift
       DASHBOARD_HOST="${1:-}"
+      ;;
+    --port)
+      shift
+      TRAEFIK_HTTP_PORT="${1:-}"
       ;;
     --skip-route)
       ROUTE_DNS=false
@@ -157,6 +163,7 @@ fi
 
 cat > .env <<EOF_ENV
 BASE_DOMAIN=${BASE_DOMAIN}
+TRAEFIK_HTTP_PORT=${TRAEFIK_HTTP_PORT}
 TRAEFIK_DASHBOARD_HOST=${DASHBOARD_HOST}
 EOF_ENV
 
@@ -185,5 +192,6 @@ info "部署完成"
 printf '\n后续检查：\n'
 printf '  docker compose ps\n'
 printf '  docker compose logs -f traefik cloudflared\n'
+printf '  本地调试入口：http://127.0.0.1:%s\n' "$TRAEFIK_HTTP_PORT"
 printf '  https://api.%s\n' "$BASE_DOMAIN"
 printf '  https://test-api.%s\n' "$BASE_DOMAIN"

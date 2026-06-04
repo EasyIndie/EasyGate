@@ -6,10 +6,10 @@
 
 ```yaml
 ports:
-  - "8080:80"
+  - "${TRAEFIK_HTTP_PORT:-18080}:80"
 ```
 
-这表示 Traefik 容器内部监听 80，但宿主机只暴露 `8080` 给局域网调试。公网流量通过 Cloudflare Tunnel 进入 Docker 网络，并访问：
+这表示 Traefik 容器内部监听 80，但宿主机默认只暴露 `18080` 给局域网调试。公网流量通过 Cloudflare Tunnel 进入 Docker 网络，并访问：
 
 ```text
 http://traefik:80
@@ -27,7 +27,19 @@ http://traefik:80
 
 ## 推荐做法
 
-- 保持本项目默认端口映射 `8080:80`。
+- 保持本项目默认端口映射 `${TRAEFIK_HTTP_PORT:-18080}:80`。
+- 如果宿主机上 `18080` 也被占用，在 `.env` 中改成另一个端口：
+
+  ```env
+  TRAEFIK_HTTP_PORT=28080
+  ```
+
+  修改后执行：
+
+  ```sh
+  docker compose --env-file .env up -d
+  ```
+
 - Cloudflare Tunnel public hostname 使用：
 
   ```text

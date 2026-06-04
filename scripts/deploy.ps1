@@ -2,6 +2,7 @@ param(
   [string]$Domain = "",
   [string]$Tunnel = "easygate-home",
   [string]$Dashboard = "",
+  [string]$Port = "18080",
   [switch]$SkipRoute,
   [switch]$Demo
 )
@@ -138,6 +139,7 @@ else {
 
 @(
   "BASE_DOMAIN=$Domain"
+  "TRAEFIK_HTTP_PORT=$Port"
   "TRAEFIK_DASHBOARD_HOST=$Dashboard"
 ) | Set-Content -Path ".env" -Encoding UTF8
 
@@ -167,5 +169,6 @@ Write-Host ""
 Write-Host "后续检查："
 Write-Host "  docker compose ps"
 Write-Host "  docker compose logs -f traefik cloudflared"
+Write-Host "  本地调试入口：http://127.0.0.1:$Port"
 Write-Host "  https://api.$Domain"
 Write-Host "  https://test-api.$Domain"

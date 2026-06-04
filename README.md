@@ -84,6 +84,18 @@ Windows PowerShell：
 
 脚本会检查依赖、创建 tunnel、写入配置并启动 EasyGate。它不会自动安装 Docker 或 `cloudflared`。
 
+默认本地调试入口是 `http://127.0.0.1:18080`。如果这个端口也被 nginx 或其他服务占用，可以指定其他端口：
+
+```sh
+./scripts/deploy.sh --domain example.com --port 28080
+```
+
+Windows PowerShell：
+
+```powershell
+.\scripts\deploy.ps1 -Domain example.com -Port 28080
+```
+
 手动部署步骤如下：
 
 1. 创建 tunnel：
@@ -268,4 +280,4 @@ GitHub Actions 会在 Ubuntu、macOS、Windows 上运行 CI，防止脚本、Com
 
 - 不要为 EasyGate 开放路由器 80/443 入站端口。
 - `cloudflared` 凭据文件不要提交到 Git。
-- 如果设备上已有 nginx，保持 EasyGate 默认 `8080:80` 映射即可共存。
+- 如果设备上已有 nginx，EasyGate 默认使用 `18080:80` 作为宿主机本地调试入口，也可以通过 `.env` 中的 `TRAEFIK_HTTP_PORT` 改成其他端口。

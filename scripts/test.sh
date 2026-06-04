@@ -57,6 +57,7 @@ bash -n scripts/local-acceptance.sh
 
 info "检查 .env.example 默认值"
 grep -q "^BASE_DOMAIN=example.com$" .env.example || fail ".env.example 缺少 BASE_DOMAIN 默认值"
+grep -q "^TRAEFIK_HTTP_PORT=18080$" .env.example || fail ".env.example 缺少 TRAEFIK_HTTP_PORT 默认值"
 grep -q "^TRAEFIK_DASHBOARD_HOST=traefik.example.com$" .env.example || fail ".env.example 缺少 dashboard host 默认值"
 
 info "检查 Traefik 网络命名"

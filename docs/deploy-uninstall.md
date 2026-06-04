@@ -34,6 +34,16 @@ Windows PowerShell：
 .\scripts\deploy.ps1 -Domain example.com -Tunnel easygate-home -Demo
 ```
 
+如果默认本地调试端口 `18080` 被占用，可以换成其他端口：
+
+```sh
+./scripts/deploy.sh --domain example.com --port 28080
+```
+
+```powershell
+.\scripts\deploy.ps1 -Domain example.com -Port 28080
+```
+
 脚本会自动完成：
 
 - 检查 Docker、Docker Compose、`cloudflared`。

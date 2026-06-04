@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 $RootDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $Strict = $env:EASYGATE_ACCEPTANCE_STRICT -eq "true"
 $ComposeArgs = @("compose", "-f", "docker-compose.local.yml", "--env-file", ".env")
+$TraefikHttpPort = "18080"
 
 function Write-Info {
   param([string]$Message)
@@ -36,7 +37,7 @@ function Compose {
 
 function Request-Text {
   param([string]$HostName)
-  Invoke-WebRequest -Uri "http://127.0.0.1:8080" -Headers @{ Host = $HostName } -UseBasicParsing
+  Invoke-WebRequest -Uri "http://127.0.0.1:$TraefikHttpPort" -Headers @{ Host = $HostName } -UseBasicParsing
 }
 
 function Cleanup {
@@ -70,6 +71,17 @@ catch {
 if (-not (Test-Path ".env")) {
   Copy-Item ".env.example" ".env"
   Write-Info "已从 .env.example 生成本机验收用 .env"
+}
+
+Get-Content ".env" | ForEach-Object {
+  $Line = $_.Trim()
+  if ($Line -eq "" -or $Line.StartsWith("#")) {
+    return
+  }
+  $Parts = $Line.Split("=", 2)
+  if ($Parts.Length -eq 2 -and $Parts[0] -eq "TRAEFIK_HTTP_PORT" -and $Parts[1] -ne "") {
+    $script:TraefikHttpPort = $Parts[1]
+  }
 }
 
 try {
@@ -109,7 +121,7 @@ try {
 
   Write-Info "验证未配置域名返回 404"
   try {
-    Invoke-WebRequest -Uri "http://127.0.0.1:8080" -Headers @{ Host = "missing.example.com" } -UseBasicParsing | Out-Null
+    Invoke-WebRequest -Uri "http://127.0.0.1:$TraefikHttpPort" -Headers @{ Host = "missing.example.com" } -UseBasicParsing | Out-Null
     Fail "missing.example.com 预期 404，实际请求成功"
   }
   catch {

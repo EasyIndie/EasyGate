@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STRICT="${EASYGATE_ACCEPTANCE_STRICT:-false}"
 COMPOSE=(docker compose -f docker-compose.local.yml --env-file .env)
+TRAEFIK_HTTP_PORT="${TRAEFIK_HTTP_PORT:-18080}"
 
 info() {
   printf '\033[1;34m[acceptance]\033[0m %s\n' "$1"
@@ -29,7 +30,7 @@ skip_or_fail() {
 
 request() {
   local host="$1"
-  curl -fsS -H "Host: ${host}" http://127.0.0.1:8080
+  curl -fsS -H "Host: ${host}" "http://127.0.0.1:${TRAEFIK_HTTP_PORT}"
 }
 
 cleanup() {
@@ -55,6 +56,12 @@ if [[ ! -f .env ]]; then
   info "已从 .env.example 生成本机验收用 .env"
 fi
 
+set -a
+# shellcheck disable=SC1091
+source .env
+set +a
+TRAEFIK_HTTP_PORT="${TRAEFIK_HTTP_PORT:-18080}"
+
 trap cleanup EXIT
 
 info "启动本机验收栈"
@@ -62,7 +69,7 @@ info "启动本机验收栈"
 
 info "等待 Traefik 就绪"
 for _ in {1..30}; do
-  if curl -fsS -H "Host: api.example.com" http://127.0.0.1:8080 >/dev/null 2>&1; then
+  if curl -fsS -H "Host: api.example.com" "http://127.0.0.1:${TRAEFIK_HTTP_PORT}" >/dev/null 2>&1; then
     break
   fi
   sleep 1
@@ -75,7 +82,7 @@ info "验证测试 demo 路由"
 request "test-api.example.com" | grep -q "Hostname:" || fail "test-api.example.com 未返回 whoami 响应"
 
 info "验证未配置域名返回 404"
-status="$(curl -sS -o /dev/null -w '%{http_code}' -H "Host: missing.example.com" http://127.0.0.1:8080)"
+status="$(curl -sS -o /dev/null -w '%{http_code}' -H "Host: missing.example.com" "http://127.0.0.1:${TRAEFIK_HTTP_PORT}")"
 [[ "$status" == "404" ]] || fail "missing.example.com 预期 404，实际 ${status}"
 
 info "本机路由验收通过"

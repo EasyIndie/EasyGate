@@ -8,7 +8,7 @@ services:
     ports:
       # 可选：用于局域网调试的本地访问入口。
       # 公网流量应该通过 Cloudflare Tunnel 进入，而不是通过路由器端口转发。
-      - "8080:80"
+      - "${TRAEFIK_HTTP_PORT:-18080}:80"
     networks:
       - easygate-proxy
     extra_hosts:

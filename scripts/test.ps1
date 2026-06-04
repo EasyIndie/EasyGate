@@ -103,6 +103,9 @@ Get-Content .env.example | ForEach-Object {
 if (-not $ExampleEnv.ContainsKey("BASE_DOMAIN") -or $ExampleEnv["BASE_DOMAIN"] -ne "example.com") {
   Fail ".env.example 缺少 BASE_DOMAIN 默认值"
 }
+if (-not $ExampleEnv.ContainsKey("TRAEFIK_HTTP_PORT") -or $ExampleEnv["TRAEFIK_HTTP_PORT"] -ne "18080") {
+  Fail ".env.example 缺少 TRAEFIK_HTTP_PORT 默认值"
+}
 if (-not $ExampleEnv.ContainsKey("TRAEFIK_DASHBOARD_HOST") -or $ExampleEnv["TRAEFIK_DASHBOARD_HOST"] -ne "traefik.example.com") {
   Fail ".env.example 缺少 dashboard host 默认值"
 }

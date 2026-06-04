@@ -56,13 +56,13 @@ docker compose -f docker-compose.local.yml --env-file .env up -d
 生产 demo：
 
 ```sh
-curl -H "Host: api.example.com" http://127.0.0.1:8080
+curl -H "Host: api.example.com" http://127.0.0.1:18080
 ```
 
 测试 demo：
 
 ```sh
-curl -H "Host: test-api.example.com" http://127.0.0.1:8080
+curl -H "Host: test-api.example.com" http://127.0.0.1:18080
 ```
 
 预期响应中可以看到 whoami 服务信息，例如：
@@ -76,7 +76,7 @@ RemoteAddr:
 ## 5. 验证 Traefik dashboard
 
 ```sh
-curl -I -H "Host: traefik.example.com" http://127.0.0.1:8080/dashboard/
+curl -I -H "Host: traefik.example.com" http://127.0.0.1:18080/dashboard/
 ```
 
 预期返回 HTTP 200 或 相关 dashboard 响应。
@@ -84,10 +84,12 @@ curl -I -H "Host: traefik.example.com" http://127.0.0.1:8080/dashboard/
 ## 6. 验证未配置域名不会误路由
 
 ```sh
-curl -I -H "Host: missing.example.com" http://127.0.0.1:8080
+curl -I -H "Host: missing.example.com" http://127.0.0.1:18080
 ```
 
 预期返回 `404`。
+
+如果你在 `.env` 中修改了 `TRAEFIK_HTTP_PORT`，把上面的 `18080` 替换成实际端口即可。
 
 ## 7. 清理本地验收栈
 
