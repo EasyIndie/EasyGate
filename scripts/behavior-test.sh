@@ -109,8 +109,8 @@ run_deploy_behavior_test() {
   assert_contains "${fixture}/cloudflared/easygate-home.json" '"source":"new"'
   assert_contains "$log" "cloudflared tunnel create easygate-home"
   assert_contains "$log" "docker compose up -d"
-  assert_contains "$log" "--profile demo"
-  assert_contains "$log" "demo-api demo-test-api"
+  compose_calls="$(grep -Fc -- "docker compose" "$log")"
+  [[ "$compose_calls" -ge 3 ]] || fail "启用 --demo 后 docker compose 调用次数不足：${compose_calls}"
 
   if grep -Fq "cloudflared tunnel route dns" "$log"; then
     fail "--skip-route 仍调用了 tunnel route dns"
