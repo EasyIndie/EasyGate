@@ -1,0 +1,28 @@
+services:
+  app:
+    image: your-image:latest
+    restart: unless-stopped
+    networks:
+      - easygate-proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=easygate-proxy
+      - traefik.http.routers.app.rule=Host(`app.example.com`)
+      - traefik.http.routers.app.entrypoints=web
+      - traefik.http.services.app.loadbalancer.server.port=3000
+
+  test-app:
+    image: your-image:latest
+    restart: unless-stopped
+    networks:
+      - easygate-proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=easygate-proxy
+      - traefik.http.routers.test-app.rule=Host(`test-app.example.com`)
+      - traefik.http.routers.test-app.entrypoints=web
+      - traefik.http.services.test-app.loadbalancer.server.port=3000
+
+networks:
+  easygate-proxy:
+    external: true

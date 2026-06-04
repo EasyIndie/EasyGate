@@ -1,0 +1,25 @@
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+api:
+  dashboard: true
+
+entryPoints:
+  web:
+    address: ":80"
+    forwardedHeaders:
+      trustedIPs:
+        # Cloudflare Tunnel 流量来自 cloudflared 容器。
+        - "172.16.0.0/12"
+        - "10.0.0.0/8"
+        - "192.168.0.0/16"
+
+providers:
+  docker:
+    exposedByDefault: false
+    network: easygate-proxy
+    watch: true
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true

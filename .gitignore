@@ -1,0 +1,5 @@
+.env
+cloudflared/*.json
+letsencrypt/
+traefik/acme.json
+.DS_Store

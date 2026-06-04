@@ -1,0 +1,65 @@
+services:
+  traefik:
+    image: traefik:v3.1
+    container_name: easygate-traefik
+    restart: unless-stopped
+    command:
+      - --configFile=/etc/traefik/traefik.yml
+    ports:
+      # 可选：用于局域网调试的本地访问入口。
+      # 公网流量应该通过 Cloudflare Tunnel 进入，而不是通过路由器端口转发。
+      - "8080:80"
+    networks:
+      - easygate-proxy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=easygate-proxy
+      - traefik.http.routers.traefik-dashboard.rule=Host(`${TRAEFIK_DASHBOARD_HOST}`)
+      - traefik.http.routers.traefik-dashboard.entrypoints=web
+      - traefik.http.routers.traefik-dashboard.service=api@internal
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: easygate-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - easygate-proxy
+    depends_on:
+      - traefik
+
+  demo-api:
+    image: traefik/whoami:v1.10
+    profiles: ["demo"]
+    restart: unless-stopped
+    networks:
+      - easygate-proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=easygate-proxy
+      - traefik.http.routers.demo-api.rule=Host(`api.${BASE_DOMAIN}`)
+      - traefik.http.routers.demo-api.entrypoints=web
+      - traefik.http.services.demo-api.loadbalancer.server.port=80
+
+  demo-test-api:
+    image: traefik/whoami:v1.10
+    profiles: ["demo"]
+    restart: unless-stopped
+    networks:
+      - easygate-proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=easygate-proxy
+      - traefik.http.routers.demo-test-api.rule=Host(`test-api.${BASE_DOMAIN}`)
+      - traefik.http.routers.demo-test-api.entrypoints=web
+      - traefik.http.services.demo-test-api.loadbalancer.server.port=80
+
+networks:
+  easygate-proxy:
+    name: easygate-proxy
