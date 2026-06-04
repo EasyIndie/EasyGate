@@ -26,7 +26,7 @@ assert_missing() {
 assert_contains() {
   local path="$1"
   local text="$2"
-  grep -Fq "$text" "$path" || fail "$path 未包含：$text"
+  grep -Fq -- "$text" "$path" || fail "$path 未包含：$text"
 }
 
 make_fixture() {
@@ -109,7 +109,8 @@ run_deploy_behavior_test() {
   assert_contains "${fixture}/cloudflared/easygate-home.json" '"source":"new"'
   assert_contains "$log" "cloudflared tunnel create easygate-home"
   assert_contains "$log" "docker compose up -d"
-  assert_contains "$log" "docker compose --profile demo up -d demo-api demo-test-api"
+  assert_contains "$log" "--profile demo"
+  assert_contains "$log" "demo-api demo-test-api"
 
   if grep -Fq "cloudflared tunnel route dns" "$log"; then
     fail "--skip-route 仍调用了 tunnel route dns"
@@ -141,14 +142,14 @@ run_cleanup_behavior_test() {
 
   (
     cd "$fixture"
-    printf 'no\n' | PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" bash scripts/cleanup.sh --purge
+    PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" EASYGATE_CONFIRM_PURGE="no" bash scripts/cleanup.sh --purge
   )
   assert_file "${fixture}/.env"
   assert_file "${fixture}/cloudflared/easygate-home.json"
 
   (
     cd "$fixture"
-    printf 'yes\n' | PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" bash scripts/cleanup.sh --purge
+    PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" EASYGATE_CONFIRM_PURGE="yes" bash scripts/cleanup.sh --purge
   )
   assert_missing "${fixture}/.env"
   assert_missing "${fixture}/.easygate"

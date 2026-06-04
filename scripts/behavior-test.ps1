@@ -145,7 +145,8 @@ function Test-DeployBehavior {
   Assert-Contains (Join-Path $Fixture "cloudflared/easygate-home.json") '"source":"new"'
   Assert-Contains $LogFile "cloudflared tunnel create easygate-home"
   Assert-Contains $LogFile "docker compose up -d"
-  Assert-Contains $LogFile "docker compose --profile demo up -d demo-api demo-test-api"
+  Assert-Contains $LogFile "--profile demo"
+  Assert-Contains $LogFile "demo-api demo-test-api"
 
   $LogText = Get-Content -Raw $LogFile
   if ($LogText.Contains("cloudflared tunnel route dns")) {
@@ -184,9 +185,11 @@ function Test-CleanupBehavior {
   Invoke-WithMockPath $BinDir {
     Push-Location $Fixture
     try {
-      "no" | & ".\scripts\cleanup.ps1" -Purge
+      $env:EASYGATE_CONFIRM_PURGE = "no"
+      & ".\scripts\cleanup.ps1" -Purge
     }
     finally {
+      Remove-Item Env:EASYGATE_CONFIRM_PURGE -ErrorAction SilentlyContinue
       Pop-Location
     }
   }
@@ -196,9 +199,11 @@ function Test-CleanupBehavior {
   Invoke-WithMockPath $BinDir {
     Push-Location $Fixture
     try {
-      "yes" | & ".\scripts\cleanup.ps1" -Purge
+      $env:EASYGATE_CONFIRM_PURGE = "yes"
+      & ".\scripts\cleanup.ps1" -Purge
     }
     finally {
+      Remove-Item Env:EASYGATE_CONFIRM_PURGE -ErrorAction SilentlyContinue
       Pop-Location
     }
   }

@@ -62,7 +62,10 @@ if [[ "$PURGE" != true ]]; then
 fi
 
 warn "即将删除本地生成配置和 tunnel 凭据。该操作不会删除 Cloudflare 上的 DNS 记录或 tunnel。"
-read -r -p "确认继续？输入 yes: " confirm
+confirm="${EASYGATE_CONFIRM_PURGE:-}"
+if [[ -z "$confirm" ]]; then
+  read -r -p "确认继续？输入 yes: " confirm
+fi
 if [[ "$confirm" != "yes" ]]; then
   warn "已取消彻底清理"
   exit 0

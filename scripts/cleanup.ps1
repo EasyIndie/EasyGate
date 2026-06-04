@@ -44,7 +44,10 @@ if (-not $Purge) {
 }
 
 Write-Warn "即将删除本地生成配置和 tunnel 凭据。该操作不会删除 Cloudflare 上的 DNS 记录或 tunnel。"
-$Confirm = Read-Host "确认继续？输入 yes"
+$Confirm = $env:EASYGATE_CONFIRM_PURGE
+if ([string]::IsNullOrWhiteSpace($Confirm)) {
+  $Confirm = Read-Host "确认继续？输入 yes"
+}
 if ($Confirm -ne "yes") {
   Write-Warn "已取消彻底清理"
   exit 0
