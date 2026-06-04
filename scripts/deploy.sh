@@ -231,7 +231,10 @@ if [[ -z "$credentials_source" || ! -f "$credentials_source" ]]; then
 fi
 
 credentials_target="cloudflared/${TUNNEL_NAME}.json"
-cp "$credentials_source" "$credentials_target"
+credentials_tmp="$(mktemp "cloudflared/${TUNNEL_NAME}.json.XXXXXX")"
+cp "$credentials_source" "$credentials_tmp"
+chmod 600 "$credentials_tmp"
+mv -f "$credentials_tmp" "$credentials_target"
 info "已复制 tunnel 凭据到 ${credentials_target}"
 
 if [[ "$ROUTE_DNS" == true ]]; then
