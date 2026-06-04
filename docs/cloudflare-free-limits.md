@@ -18,7 +18,7 @@ Cloudflare One 文档中列出的默认限制：
 
 - 每个账号最多 1000 个 `cloudflared` tunnels。
 - Tunnel hostname routes 和 CIDR routes 合计最多 1000 条。
-- 单个 tunnel 最多 25 个活跃 `cloudflared` 副本。
+- 单个 tunnel 最多 25 个活跃 `cloudflared` 副本，也就是最多 100 条连接。
 
 对于一人公司、几台家庭设备、几十到上百个服务，这些额度通常足够。
 

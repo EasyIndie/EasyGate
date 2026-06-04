@@ -1,10 +1,23 @@
-# 清理部署
+# 清理
 
-EasyGate 支持一键清理部署。
+清理前先区分目标：
 
-## 默认清理
+- 只结束 demo 验收：移除 demo 容器，保留 EasyGate 基础入口。
+- 暂停 EasyGate：停止并移除 Compose 容器和网络，保留本地配置。
+- 彻底清理本机：删除本地生成配置、CLI 和 tunnel 凭据。
 
-默认清理只停止并移除 Docker Compose 创建的容器和网络，不删除本地配置和 tunnel 凭据。
+## 只清理 demo
+
+公网或本机验收完成后，推荐只移除 demo 服务：
+
+```sh
+docker compose --profile demo stop demo-api demo-test-api
+docker compose --profile demo rm -f demo-api demo-test-api
+```
+
+清理后 `traefik` 和 `cloudflared` 会继续运行，`api.example.com`、`test-api.example.com` 如果没有其他服务接管，会返回 404。
+
+## 停止 EasyGate，保留配置
 
 macOS / Linux：
 
@@ -24,21 +37,19 @@ Windows PowerShell：
 .\scripts\cleanup.ps1
 ```
 
-默认清理会保留：
+默认清理会停止并移除 Docker Compose 创建的容器和网络，保留：
 
 - `.env`
 - `.easygate/`
 - `cloudflared/config.yml`
-- `cloudflared/<TUNNEL_ID>.json`
+- `cloudflared/*.json`
 - Traefik 配置
 - Cloudflare DNS 记录
 - Cloudflare Tunnel
 
 ## 彻底清理本地文件
 
-如果确认要删除本地生成配置和 tunnel 凭据：
-
-macOS / Linux：
+确认这台机器不再需要本地配置和 tunnel 凭据后：
 
 ```sh
 make purge
@@ -56,22 +67,15 @@ Windows PowerShell：
 .\scripts\cleanup.ps1 -Purge
 ```
 
-彻底清理会先要求输入 `yes` 确认，然后删除：
+脚本会要求输入 `yes`，然后删除：
 
 - `.env`
 - `.easygate/`
 - `cloudflared/config.yml`
 - `cloudflared/*.json`
 
-## 不会自动删除的 Cloudflare 资源
+## Cloudflare 侧资源
 
 清理脚本不会删除 Cloudflare 上的 DNS 记录或 tunnel。原因是这些资源可能仍被其他设备或服务使用。
 
-如果你确实要删除 Cloudflare 侧资源，请手动确认后再执行：
-
-```sh
-cloudflared tunnel route dns delete easygate-home "*.example.com"
-cloudflared tunnel delete easygate-home
-```
-
-具体命令是否可用取决于当前 `cloudflared` 版本。删除前建议先确认没有其他服务依赖该 tunnel。
+如果确认要删除 Cloudflare 侧资源，请在 Cloudflare Dashboard 中手动删除，或使用 `cloudflared` CLI 处理。删除前先确认没有其他服务依赖同一个 tunnel 或通配 DNS 路由。

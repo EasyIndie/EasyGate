@@ -1,56 +1,119 @@
 # Cloudflare 配置清单
 
-## DNS 和 TLS
+## 域名和证书
 
-- 使用 Cloudflare Free，并采用 Full DNS setup。
-- 将域名的权威 nameserver 切换到 Cloudflare。
-- 保持 Universal SSL 开启。
-- 只使用一级子域名：
+- 域名使用 Cloudflare Full DNS setup，权威 nameserver 已切到 Cloudflare。
+- Cloudflare Overview 显示站点已激活。
+- Universal SSL 保持开启。
+- 生产和测试服务使用一级子域名：
 
   ```text
   service.example.com
   test-service.example.com
   ```
 
-- 在免费计划下不要使用 `test.service.example.com`，除非你额外购买或配置自定义证书覆盖。
+- 不依赖 `test.service.example.com` 这类更深层级子域名，除非你已单独配置证书覆盖。
+
+## DNS 记录
+
+推荐让 EasyGate 接管未单独配置的一级子域名：
+
+```text
+*.example.com -> Cloudflare Tunnel
+```
+
+保留不进入 EasyGate 的具体记录，例如：
+
+```text
+www.example.com
+mail.example.com
+cdn.example.com
+```
+
+具体记录优先于通配记录，不会被 `*.example.com` 覆盖。
 
 ## Tunnel
 
-- 使用 `cloudflared` CLI 创建 tunnel。
-- 详细步骤见 `docs/create-cloudflare-tunnel.md`。
-- 推荐只配置一个通配入口：
+推荐使用部署脚本创建或复用 tunnel：
 
-  ```text
-  *.example.com -> http://traefik:80
-  ```
+```sh
+./scripts/deploy.sh --domain example.com
+```
 
-- 已有的具体 DNS 记录会优先于通配记录。`*.example.com` 只会接管没有单独配置的子域名。
-- 如果某个域名不需要进入 EasyGate，请在 Cloudflare DNS 中为它保留或创建具体记录。
-- 不要开放路由器的 80 或 443 入站端口。
+Windows：
 
-## 冒烟测试
+```powershell
+.\scripts\deploy.ps1 -Domain example.com
+```
 
-执行 `docker compose up -d` 后：
+如果手动配置，Cloudflare Tunnel 的 public hostname / ingress 目标应为：
+
+```text
+*.example.com -> http://traefik:80
+```
+
+不要配置为 `http://localhost:80`。在 `cloudflared` 容器里，`localhost` 指向容器自己，不是 Traefik。
+
+## DNS 传播检查
+
+域名刚迁到 Cloudflare 时，不同递归 DNS 可能返回不一致结果。用公共 DNS 检查：
+
+```sh
+dig @1.1.1.1 example.com NS +short
+dig @8.8.8.8 example.com NS +short
+dig @223.5.5.5 example.com NS +short
+
+dig @1.1.1.1 api.example.com A +short
+dig @8.8.8.8 api.example.com A +short
+dig @223.5.5.5 api.example.com A +short
+```
+
+预期：
+
+- NS 返回 Cloudflare 分配的两个 nameserver。
+- 橙云代理下的子域名返回 Cloudflare IP。
+
+如果公共 DNS 已正确、本机浏览器仍异常，优先清理本机 DNS 缓存或换网络测试。
+
+## HTTPS 验收
+
+启动 demo：
+
+```sh
+make demo
+```
+
+测试：
 
 ```sh
 curl -I https://api.example.com
+curl https://api.example.com
 curl -I https://test-api.example.com
+curl https://test-api.example.com
 ```
 
-预期结果：
+预期：
 
-- 公开生产服务返回业务响应。
-- 测试服务返回对应测试服务响应。
-- 路由器入站端口保持关闭。
+- HTTP 状态为 200。
+- 响应头包含 `server: cloudflare`。
+- 响应体包含 `Hostname:`。
 
-## 限制说明
+验收完成后移除 demo：
 
-请求数、Tunnel 数量、上传大小和大流量场景限制见 `docs/cloudflare-free-limits.md`。
+```sh
+docker compose --profile demo stop demo-api demo-test-api
+docker compose --profile demo rm -f demo-api demo-test-api
+```
 
-## nginx 共存
+## 安全和边界
 
-如果部署设备上已有 nginx，端口共存和接入方式见 `docs/nginx-compatibility.md`。
+- 不开放路由器 80/443 入站端口。
+- 不提交 `cloudflared/*.json` 凭据文件。
+- 不把 Cloudflare Free 当作大文件分发、公开网盘或视频流量出口。
+- 请求体大小、Tunnel 数量和流量适用性见 [cloudflare-free-limits.md](cloudflare-free-limits.md)。
 
-## 百度云域名迁移
+## 相关文档
 
-如果域名注册在百度云，切换到 Cloudflare Full DNS setup 的步骤见 `docs/baidu-domain-to-cloudflare.md`。
+- [创建 Cloudflare Tunnel](create-cloudflare-tunnel.md)
+- [百度云域名迁移到 Cloudflare](baidu-domain-to-cloudflare.md)
+- [与已有 nginx 共存](nginx-compatibility.md)

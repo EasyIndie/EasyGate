@@ -62,12 +62,12 @@ windows-latest：.\scripts\test.ps1
 
 CI 还会运行本机验收脚本。Ubuntu 强制跑完整容器级验收；macOS 和 Windows 在 Docker daemon 不可用时会跳过运行时验收，但仍覆盖入口脚本兼容性。
 
-## 后续可扩展测试
+## 本机验收
 
-后续可以继续增加：
+本机路由验收由 `scripts/local-acceptance.sh` 和 `scripts/local-acceptance.ps1` 提供：
 
-- 使用临时 `.env` 的部署脚本非交互测试。
-- 使用 `docker compose up` 启动 demo 服务的集成测试。
-- 通过 curl 验证 Traefik 本地路由。
-- 使用容器内 mock 服务验证 Docker labels 自动发现。
-- 使用临时配置检查 `cloudflared` ingress 规则。
+```sh
+make local-acceptance
+```
+
+它会启动 Traefik 和 demo 服务，通过 curl 验证生产域名、测试域名和未配置域名的路由行为。详细说明见 [local-acceptance.md](local-acceptance.md)。

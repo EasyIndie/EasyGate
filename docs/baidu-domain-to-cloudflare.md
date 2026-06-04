@@ -91,24 +91,19 @@ dig +trace example.com
 ## 切换后配置 EasyGate
 
 1. 在 Cloudflare 确认 Universal SSL 已开启。
-2. 创建 Cloudflare Tunnel。
-3. 添加 public hostname：
+2. 按 [create-cloudflare-tunnel.md](create-cloudflare-tunnel.md) 使用部署脚本创建或复用 tunnel。
+3. 确认 Cloudflare DNS 中存在通配入口：
 
    ```text
-   *.example.com -> http://traefik:80
+   *.example.com -> Cloudflare Tunnel
    ```
 
-4. 按 `docs/create-cloudflare-tunnel.md` 创建 tunnel，并配置通配入口：
+4. 保留不进入 EasyGate 的具体记录，例如官网、邮件、CDN。
+5. 启动 demo 后用 HTTPS 验收：
 
    ```text
-   *.example.com -> http://traefik:80
-   ```
-
-5. 在 `.env` 中填入：
-
-   ```text
-   BASE_DOMAIN=example.com
-   TRAEFIK_DASHBOARD_HOST=traefik.example.com
+   https://api.example.com
+   https://test-api.example.com
    ```
 
 ## 验证清单
@@ -117,8 +112,8 @@ dig +trace example.com
 - Cloudflare Overview 页面显示站点已激活。
 - Cloudflare DNS 中保留了所有必要记录。
 - 邮件收发正常，尤其是 `MX`、SPF、DKIM、DMARC。
-- `https://api.example.com` 可以访问。
-- `https://test-api.example.com` 可以访问测试服务。
+- `https://api.example.com` 可以访问 demo 或真实服务。
+- `https://test-api.example.com` 可以访问 demo 或测试服务。
 - 家庭路由器没有开放 80/443 入站端口。
 
 ## 回滚方式

@@ -1,31 +1,27 @@
-# 本机测试验收
+# 验收
 
-本机验收分两层：
+EasyGate 验收分两类：
 
-1. 静态检查：不需要 Docker。
-2. 本地路由验收：需要 Docker，但不需要真实域名或 Cloudflare Tunnel。
+- 本机验收：只验证 Traefik 路由和 Docker 自动发现，不需要真实域名或 Cloudflare Tunnel。
+- 公网 HTTPS 验收：验证 Cloudflare DNS、HTTPS、Tunnel、Traefik 和 demo 服务完整链路。
 
-## 1. 静态检查
+## 静态检查
 
 ```sh
 make test
 ```
 
-该命令会检查脚本语法、YAML、文档链接、命名约定等基础质量。
+Windows PowerShell：
 
-## 2. 准备本地配置
-
-复制 `.env`：
-
-```sh
-cp .env.example .env
+```powershell
+.\scripts\test.ps1
 ```
 
-默认 `example.com` 就可以用于本地验收。
+测试会检查关键文件、脚本语法、Compose 配置、YAML、文档链接和跨平台入口。
 
-## 3. 启动本地验收栈
+## 本机路由验收
 
-推荐直接运行自动验收：
+推荐直接运行：
 
 ```sh
 make local-acceptance
@@ -37,9 +33,9 @@ Windows PowerShell：
 .\scripts\local-acceptance.ps1
 ```
 
-下面是手动验收步骤。
+脚本会在没有 `.env` 时从 `.env.example` 生成一个本机验收配置。它只启动 Traefik 和 demo 服务，不启动 `cloudflared`，也不需要 tunnel 凭据。
 
-本地验收栈只启动 Traefik 和 demo 服务，不启动 cloudflared，因此不需要 tunnel 凭据：
+手动运行：
 
 ```sh
 make local-up
@@ -51,21 +47,19 @@ make local-up
 docker compose -f docker-compose.local.yml --env-file .env --profile demo up -d
 ```
 
-## 4. 验证 Docker 自动发现
-
-生产 demo：
+验证生产 demo：
 
 ```sh
 curl -H "Host: api.example.com" http://127.0.0.1:18080
 ```
 
-测试 demo：
+验证测试 demo：
 
 ```sh
 curl -H "Host: test-api.example.com" http://127.0.0.1:18080
 ```
 
-预期响应中可以看到 whoami 服务信息，例如：
+预期响应包含：
 
 ```text
 Hostname:
@@ -73,53 +67,78 @@ IP:
 RemoteAddr:
 ```
 
-## 5. 验证 Traefik dashboard
-
-```sh
-curl -I -H "Host: traefik.example.com" http://127.0.0.1:18080/dashboard/
-```
-
-预期返回 HTTP 200 或 相关 dashboard 响应。
-
-## 6. 验证未配置域名不会误路由
+验证未配置域名返回 404：
 
 ```sh
 curl -I -H "Host: missing.example.com" http://127.0.0.1:18080
 ```
 
-预期返回 `404`。
-
-如果你在 `.env` 中修改了 `TRAEFIK_HTTP_PORT`，把上面的 `18080` 替换成实际端口即可。
-
-## 7. 清理本地验收栈
+清理本机验收栈：
 
 ```sh
 make local-down
 ```
 
-## 8. 完整公网验收
+## 公网 HTTPS 验收
 
-完成 Cloudflare Tunnel 配置后，再运行正式栈：
+完成部署后启动 demo：
 
 ```sh
-make up
 make demo
 ```
 
-然后访问：
+访问：
 
 ```text
 https://api.example.com
 https://test-api.example.com
 ```
 
-把 `example.com` 替换成你的真实域名。
+或用 curl：
 
-## CI 中的行为
+```sh
+curl -I https://api.example.com
+curl https://api.example.com
+curl -I https://test-api.example.com
+curl https://test-api.example.com
+```
 
-GitHub Actions 会在 Ubuntu、macOS、Windows 矩阵里运行本机验收脚本。
+预期：
 
-- Ubuntu runner 强制执行完整容器级路由验收。
-- macOS 和 Windows runner 会运行同一入口脚本；如果托管环境没有可用 Docker daemon，会明确跳过运行时验收。
+- HTTP 状态为 200。
+- 响应体包含 `Hostname:`。
+- 响应头里能看到 `server: cloudflare`。
 
-这样可以同时覆盖脚本兼容性和 Linux 上的真实 Docker 路由行为。
+如果本地 curl 出现 DNS 或 TLS 异常，先用公共 DNS 检查解析：
+
+```sh
+dig @1.1.1.1 example.com NS +short
+dig @1.1.1.1 api.example.com A +short
+dig @8.8.8.8 api.example.com A +short
+```
+
+域名刚迁到 Cloudflare 时，本机、运营商或代理 DNS 可能还有缓存。可以换浏览器无痕窗口、换网络，或临时指定 Cloudflare IP 验证：
+
+```sh
+curl --resolve api.example.com:443:<CLOUDFLARE_IP> https://api.example.com
+```
+
+把 `<CLOUDFLARE_IP>` 换成公共 DNS 实际返回的 Cloudflare IP。
+
+## 公网验收后清理 demo
+
+只移除 demo，保留 `traefik` 和 `cloudflared`：
+
+```sh
+docker compose --profile demo stop demo-api demo-test-api
+docker compose --profile demo rm -f demo-api demo-test-api
+```
+
+清理后，如果没有其他服务接管这些域名，本地路由会返回 404。
+
+## CI 行为
+
+GitHub Actions 会在 Ubuntu、macOS、Windows 上运行检查。
+
+- Ubuntu 强制执行完整容器级本机验收。
+- macOS 和 Windows 会运行同一入口脚本；如果托管环境没有可用 Docker daemon，会明确跳过运行时验收。

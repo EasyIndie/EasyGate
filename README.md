@@ -2,75 +2,44 @@
 
 [![CI](https://github.com/EasyIndie/EasyGate/actions/workflows/ci.yml/badge.svg)](https://github.com/EasyIndie/EasyGate/actions/workflows/ci.yml)
 
-EasyGate 是一个面向家庭 NAT、家庭实验室和一人公司的轻量入口网关。它使用 Cloudflare Free + Cloudflare Tunnel 提供公网 HTTPS 入口，用 Traefik 自动发现和分发本地服务。
-
-你只需要维护服务名和端口，不需要为每个服务反复配置反向代理、证书和路由器端口转发。
+EasyGate 是一个面向家庭 NAT、家庭实验室和一人公司的轻量入口网关。它用 Cloudflare Free + Cloudflare Tunnel 提供公网 HTTPS 入口，用 Traefik 在本地分发 Docker、宿主机和局域网服务。
 
 ```text
-浏览器 -> Cloudflare HTTPS -> Cloudflare Tunnel -> Traefik -> Docker / localhost / 局域网服务
+浏览器 -> Cloudflare HTTPS -> Cloudflare Tunnel -> Traefik -> 本地服务
 ```
 
-## 适合什么场景
+公网 TLS 由 Cloudflare 处理，本地服务可以继续使用 HTTP。部署设备不需要公网 IP，也不需要开放路由器 80/443 入站端口。
 
-- 家庭 NAT 下没有公网 IP，或者不想开放路由器 80/443。
-- 服务数量多，后续还会持续增加。
-- 服务既有 Docker 容器，也有本机端口或局域网设备服务。
-- 希望尽量使用 Cloudflare Free，不引入 VPS、Kubernetes 或自建证书体系。
+## 当前能力
 
-不适合把 Cloudflare Free 当成大文件分发、公开视频流媒体或高带宽下载出口。
+- Cloudflare Tunnel 出站连接，避免家庭 NAT 和路由器端口转发。
+- Traefik Docker provider 自动发现带 labels 的容器服务。
+- Traefik file provider 接入宿主机端口或局域网 IP 服务。
+- 默认使用一级子域名：`service.example.com`、`test-service.example.com`。
+- 提供 macOS / Linux Bash 脚本和 Windows PowerShell 脚本。
+- 提供 demo 服务、本机验收脚本、清理脚本和 CI 检查。
 
-## 核心能力
+不适合把 Cloudflare Free 当作大文件分发、公开网盘、公开视频流或持续高带宽出口。限制说明见 [docs/cloudflare-free-limits.md](docs/cloudflare-free-limits.md)。
 
-- **统一 HTTPS 入口**：公网 TLS 由 Cloudflare 处理，本地服务可以继续跑 HTTP。
-- **无需路由器端口转发**：`cloudflared` 主动出站连接 Cloudflare。
-- **Docker 自动发现**：容器通过 Traefik labels 自动接入。
-- **非 Docker 服务接入**：Traefik file provider 可以转发到 `localhost` 或局域网 IP。
-- **测试环境约定**：生产用 `service.example.com`，测试用 `test-service.example.com`。
-- **跨平台部署**：支持 macOS、Linux、Windows 11。
+## 前置条件
 
-## 部署前准备
+1. 域名使用 Cloudflare Full DNS setup，权威 nameserver 已切到 Cloudflare。
+2. Cloudflare Universal SSL 保持开启。
+3. 部署设备已安装 Docker 和 Docker Compose 插件。
+4. 部署设备能访问 Cloudflare API 和 Tunnel 网络。
 
-1. 准备一个域名，并使用 Cloudflare Full DNS setup。
-2. 在 Cloudflare 保持 Universal SSL 开启。
-3. 在部署设备上安装 Docker 和 Docker Compose 插件。
-4. 使用一键部署脚本创建 Cloudflare Tunnel；如果缺少 `cloudflared` CLI，脚本会自动下载到项目本地目录。
-5. 配置通配入口：
+EasyGate 不会安装 Docker。部署脚本在缺少 `cloudflared` CLI 时会下载到项目本地 `.easygate/bin/`。
 
-   ```text
-   *.example.com -> http://traefik:80
-   ```
+如果域名刚迁移到 Cloudflare，DNS 传播可能需要几分钟到数小时。可以用以下命令确认：
 
-如果你的域名还在普通 DNS 服务商或云厂商 DNS 上，需要先把权威 DNS 切到 Cloudflare。迁移含义是“DNS 解析迁移”，不是必须把域名注册商也转走。
-
-- 百度云域名迁移可以参考：[docs/baidu-domain-to-cloudflare.md](docs/baidu-domain-to-cloudflare.md)。
-- 切换稳定前建议保留原平台解析记录，确认无误后再清理。
-
-Cloudflare Tunnel 创建步骤见：[docs/create-cloudflare-tunnel.md](docs/create-cloudflare-tunnel.md)。
-
-如果 Cloudflare DNS 里已有一部分域名不需要进入 EasyGate，请保留它们的具体 DNS 记录。具体记录优先于 `*.example.com` 通配入口，通配入口只会接管未单独配置的子域名。
-
-EasyGate 不会自动安装 Docker 或 Docker Compose。`cloudflared` CLI 可由一键部署脚本自动安装到 `.easygate/bin/`；`make up` 只负责启动项目容器。
-
-## 域名约定
-
-Cloudflare Free 的 Universal SSL 在 Full DNS setup 下最省事的覆盖方式是根域名和一级子域名，所以推荐：
-
-```text
-生产环境：api.example.com
-测试环境：test-api.example.com
+```sh
+dig @1.1.1.1 example.com NS +short
+dig @1.1.1.1 api.example.com A +short
 ```
-
-避免使用：
-
-```text
-test.api.example.com
-```
-
-这种更深层级子域名可能超出免费证书默认覆盖范围。
 
 ## 快速部署
 
-推荐使用一键部署脚本：
+macOS / Linux：
 
 ```sh
 ./scripts/deploy.sh --domain example.com
@@ -82,95 +51,93 @@ Windows PowerShell：
 .\scripts\deploy.ps1 -Domain example.com
 ```
 
-脚本会检查依赖、按需安装 `cloudflared` CLI、创建 tunnel、写入配置并启动 EasyGate。它不会自动安装 Docker 或 Docker Compose。
+脚本会完成：
 
-如果你想完全自行管理 `cloudflared`，可以跳过自动安装：
+- 检查 Docker 和 Docker Compose。
+- 按需准备 `cloudflared` CLI。
+- 引导 Cloudflare 登录。
+- 创建或复用 Cloudflare Tunnel。
+- 尝试创建 `*.example.com` 通配 DNS 路由。
+- 写入 `.env` 和 `cloudflared/config.yml`。
+- 复制 tunnel 凭据到 `cloudflared/`。
+- 启动 `traefik` 和 `cloudflared`。
 
-```sh
-./scripts/deploy.sh --domain example.com --no-install-cloudflared
-```
-
-Windows PowerShell：
-
-```powershell
-.\scripts\deploy.ps1 -Domain example.com -NoInstallCloudflared
-```
-
-默认本地调试入口是 `http://127.0.0.1:18080`。如果这个端口也被 nginx 或其他服务占用，可以指定其他端口：
+常用选项：
 
 ```sh
+./scripts/deploy.sh --domain example.com --demo
 ./scripts/deploy.sh --domain example.com --port 28080
+./scripts/deploy.sh --domain example.com --no-install-cloudflared
+./scripts/deploy.sh --domain example.com --skip-route
 ```
 
-Windows PowerShell：
+Windows 对应参数：
 
 ```powershell
+.\scripts\deploy.ps1 -Domain example.com -Demo
 .\scripts\deploy.ps1 -Domain example.com -Port 28080
+.\scripts\deploy.ps1 -Domain example.com -NoInstallCloudflared
+.\scripts\deploy.ps1 -Domain example.com -SkipRoute
 ```
 
-手动部署步骤如下：
-
-1. 创建 tunnel：
-
-   ```sh
-   cloudflared tunnel login
-   cloudflared tunnel create easygate-home
-   cloudflared tunnel route dns easygate-home "*.example.com"
-   ```
-
-2. 配置 EasyGate：
-
-   ```sh
-   cp .env.example .env
-   cp cloudflared/config.yml.example cloudflared/config.yml
-   ```
-
-3. 编辑：
-
-   ```text
-   .env
-   cloudflared/config.yml
-   ```
-
-4. 将 `<TUNNEL_ID>.json` 放入：
-
-   ```text
-   cloudflared/
-   ```
-
-5. 启动：
-
-   ```sh
-   make up
-   ```
-
-## 常用命令
+部署后查看状态：
 
 ```sh
-make up      # 启动核心服务
-make local-up # 本机验收，不启动 cloudflared
-make local-acceptance # 自动运行本机路由验收
-make logs    # 查看 Traefik 和 cloudflared 日志
-make ps      # 查看容器状态
-make demo    # 启动演示服务
-make down    # 停止服务
-make cleanup # 清理容器和网络，保留本地配置
-make purge   # 删除本地生成配置、本地 CLI 和 tunnel 凭据
-make test    # 运行测试
+docker compose ps
+docker compose logs -f traefik cloudflared
 ```
 
-演示服务启动后可以访问：
+## Demo 验收
+
+启动 demo：
+
+```sh
+make demo
+```
+
+访问：
 
 ```text
 https://api.example.com
 https://test-api.example.com
 ```
 
-把 `example.com` 替换成你的真实域名。
+预期看到 `traefik/whoami` 返回的 `Hostname:`、`IP:`、`RemoteAddr:` 等文本。
 
-## 添加 Docker 服务
+本地不经过 Cloudflare 的路由验证：
 
-把服务加入共享的 `easygate-proxy` Docker 网络，并添加 Traefik labels：
+```sh
+curl -H "Host: api.example.com" http://127.0.0.1:18080
+curl -H "Host: test-api.example.com" http://127.0.0.1:18080
+```
+
+验收完成后只移除 demo 服务，保留 EasyGate 基础入口：
+
+```sh
+docker compose --profile demo stop demo-api demo-test-api
+docker compose --profile demo rm -f demo-api demo-test-api
+```
+
+完整验收说明见 [docs/local-acceptance.md](docs/local-acceptance.md)。
+
+## 常用命令
+
+```sh
+make up                # 启动 Traefik 和 cloudflared
+make demo              # 启动 demo 服务
+make ps                # 查看容器状态
+make logs              # 查看核心服务日志
+make config            # 渲染 Compose 配置
+make down              # 停止并移除 Compose 容器和网络
+make cleanup           # 同 make down，保留本地配置和凭据
+make purge             # 删除本地生成配置、本地 CLI 和 tunnel 凭据
+make test              # 静态检查
+make local-acceptance  # 本机路由验收
+```
+
+## 接入 Docker 服务
+
+服务容器加入共享网络 `easygate-proxy`，并添加 Traefik labels：
 
 ```yaml
 services:
@@ -190,23 +157,23 @@ networks:
     external: true
 ```
 
-测试服务只需要换成 `test-` 前缀：
+测试服务推荐用 `test-` 前缀：
 
 ```yaml
 - traefik.http.routers.test-app.rule=Host(`test-app.example.com`)
 ```
 
-完整示例见：[examples/docker-service.compose.yml](examples/docker-service.compose.yml)。
+完整示例见 [examples/docker-service.compose.yml](examples/docker-service.compose.yml)。
 
-## 添加非 Docker 服务
+## 接入非 Docker 服务
 
-对于直接运行在宿主机上的服务，编辑：
+编辑：
 
 ```text
 traefik/dynamic/localhost-services.yml
 ```
 
-示例：
+宿主机端口示例：
 
 ```yaml
 http:
@@ -224,7 +191,7 @@ http:
           - url: http://host.docker.internal:8080
 ```
 
-如果服务在局域网其他设备上，也可以转发到它的局域网地址：
+局域网设备服务可以写成：
 
 ```yaml
 servers:
@@ -233,63 +200,47 @@ servers:
 
 Traefik 会监听动态配置目录并自动重载。
 
-## 多设备部署建议
+## 域名约定
 
-最推荐：只在一台稳定设备上部署 EasyGate，让它反代局域网内其他设备服务。
-
-```text
-Cloudflare Tunnel -> 入口设备 Traefik -> 局域网其他设备
-```
-
-不建议多台设备同时接管同一个 `*.example.com`。如果确实需要多入口，每台设备应使用不重叠的一级子域名，例如：
+Cloudflare Free 的 Universal SSL 默认覆盖根域名和一级子域名。推荐：
 
 ```text
-nas-api.example.com
-mini-api.example.com
-test-nas-api.example.com
-test-mini-api.example.com
+api.example.com
+test-api.example.com
 ```
 
-更多说明见：[docs/deployment-modes.md](docs/deployment-modes.md)。
+避免依赖更深层级域名：
 
-## 测试
+```text
+test.api.example.com
+```
 
-本地测试：
+如果 Cloudflare DNS 里已有不需要进入 EasyGate 的具体记录，保留它们即可。具体记录优先于 `*.example.com` 通配记录。
+
+## 清理
+
+停止并移除 EasyGate 容器和网络，保留 `.env`、`cloudflared/config.yml` 和 tunnel 凭据：
 
 ```sh
-make test
+make cleanup
 ```
 
-Windows 11 PowerShell：
-
-```powershell
-.\scripts\test.ps1
-```
-
-本机路由验收：
+彻底删除本地生成配置、本地 CLI 和 tunnel 凭据：
 
 ```sh
-make local-acceptance
+make purge
 ```
 
-GitHub Actions 会在 Ubuntu、macOS、Windows 上运行 CI，防止脚本、Compose 配置、文档链接和跨平台入口被改坏。
+清理脚本不会删除 Cloudflare 上的 DNS 记录或 tunnel。更多说明见 [docs/cleanup.md](docs/cleanup.md)。
 
-## 文档索引
+## 文档
 
+- [一键部署与清理](docs/deploy-uninstall.md)
 - [Cloudflare 配置清单](docs/cloudflare-checklist.md)
 - [创建 Cloudflare Tunnel](docs/create-cloudflare-tunnel.md)
-- [Cloudflare Free 限制说明](docs/cloudflare-free-limits.md)
 - [本机测试验收](docs/local-acceptance.md)
-- [一键部署与卸载](docs/deploy-uninstall.md)
-- [清理部署](docs/cleanup.md)
 - [部署模式](docs/deployment-modes.md)
-- [平台兼容性](docs/platform-compatibility.md)
 - [与已有 nginx 共存](docs/nginx-compatibility.md)
-- [百度云域名迁移到 Cloudflare 示例](docs/baidu-domain-to-cloudflare.md)
+- [平台兼容性](docs/platform-compatibility.md)
 - [自动化测试](docs/testing.md)
-
-## 运维提醒
-
-- 不要为 EasyGate 开放路由器 80/443 入站端口。
-- `cloudflared` 凭据文件不要提交到 Git。
-- 如果设备上已有 nginx，EasyGate 默认使用 `18080:80` 作为宿主机本地调试入口，也可以通过 `.env` 中的 `TRAEFIK_HTTP_PORT` 改成其他端口。
+- [百度云域名迁移到 Cloudflare](docs/baidu-domain-to-cloudflare.md)
