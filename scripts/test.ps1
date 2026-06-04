@@ -125,6 +125,23 @@ if ($ExampleText -notmatch "traefik\.docker\.network=easygate-proxy") {
   Fail "示例服务未使用 easygate-proxy"
 }
 
+Write-Info "检查 cloudflared 自动安装入口"
+$DeploySh = Get-Content -Raw scripts/deploy.sh
+$DeployPs = Get-Content -Raw scripts/deploy.ps1
+
+if ($DeploySh -notmatch "--no-install-cloudflared") {
+  Fail "deploy.sh 缺少 cloudflared 自动安装开关"
+}
+if ($DeploySh -notmatch "cloudflared-linux-") {
+  Fail "deploy.sh 缺少 Linux cloudflared 下载逻辑"
+}
+if ($DeploySh -notmatch "cloudflared-darwin-") {
+  Fail "deploy.sh 缺少 macOS cloudflared 下载逻辑"
+}
+if ($DeployPs -notmatch "cloudflared-windows-") {
+  Fail "deploy.ps1 缺少 Windows cloudflared 下载逻辑"
+}
+
 Write-Info "检查文档链接文件是否存在"
 $DocFiles = @("README.md") + (Get-ChildItem docs -Filter "*.md" | ForEach-Object { $_.FullName })
 $Links = @()

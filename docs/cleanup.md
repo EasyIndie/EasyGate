@@ -27,6 +27,7 @@ Windows PowerShell：
 默认清理会保留：
 
 - `.env`
+- `.easygate/`
 - `cloudflared/config.yml`
 - `cloudflared/<TUNNEL_ID>.json`
 - Traefik 配置
@@ -58,6 +59,7 @@ Windows PowerShell：
 彻底清理会先要求输入 `yes` 确认，然后删除：
 
 - `.env`
+- `.easygate/`
 - `cloudflared/config.yml`
 - `cloudflared/*.json`
 

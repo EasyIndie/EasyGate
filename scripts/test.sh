@@ -65,6 +65,12 @@ grep -q "easygate-proxy" docker-compose.yml || fail "docker-compose.yml 缺少 e
 grep -q "network: easygate-proxy" traefik/traefik.yml || fail "traefik.yml 未指向 easygate-proxy"
 grep -q "traefik.docker.network=easygate-proxy" examples/docker-service.compose.yml || fail "示例服务未使用 easygate-proxy"
 
+info "检查 cloudflared 自动安装入口"
+grep -q -- "--no-install-cloudflared" scripts/deploy.sh || fail "deploy.sh 缺少 cloudflared 自动安装开关"
+grep -q "cloudflared-linux-" scripts/deploy.sh || fail "deploy.sh 缺少 Linux cloudflared 下载逻辑"
+grep -q "cloudflared-darwin-" scripts/deploy.sh || fail "deploy.sh 缺少 macOS cloudflared 下载逻辑"
+grep -q "cloudflared-windows-" scripts/deploy.ps1 || fail "deploy.ps1 缺少 Windows cloudflared 下载逻辑"
+
 info "检查文档链接文件是否存在"
 while IFS= read -r link; do
   [[ -f "${link}" ]] || fail "文档链接指向不存在的文件：${link}"

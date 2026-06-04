@@ -20,7 +20,7 @@ usage() {
   cat <<'EOF_USAGE'
 用法：
   ./scripts/cleanup.sh          停止并移除 EasyGate 容器和网络
-  ./scripts/cleanup.sh --purge  同时删除本地生成的 .env、cloudflared/config.yml 和 tunnel 凭据
+  ./scripts/cleanup.sh --purge  同时删除本地生成的 .env、.easygate/、cloudflared/config.yml 和 tunnel 凭据
 EOF_USAGE
 }
 
@@ -70,12 +70,13 @@ fi
 
 paths=(
   ".env"
+  ".easygate"
   "cloudflared/config.yml"
 )
 
 for path in "${paths[@]}"; do
   if [[ -e "$path" ]]; then
-    rm -f "$path"
+    rm -rf "$path"
     info "已删除 $path"
   fi
 done

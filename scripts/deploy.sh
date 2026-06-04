@@ -8,6 +8,7 @@ DASHBOARD_HOST="${TRAEFIK_DASHBOARD_HOST:-}"
 TRAEFIK_HTTP_PORT="${TRAEFIK_HTTP_PORT:-18080}"
 ROUTE_DNS=true
 START_DEMO=false
+INSTALL_CLOUDFLARED=true
 
 info() {
   printf '\033[1;34m[deploy]\033[0m %s\n' "$1"
@@ -31,6 +32,8 @@ usage() {
   --tunnel <name>         tunnel 名称，默认 easygate-home
   --dashboard <hostname>  Traefik dashboard 域名，默认 traefik.<domain>
   --port <port>           Traefik 宿主机本地调试端口，默认 18080
+  --no-install-cloudflared
+                          缺少 cloudflared 时不自动下载本地 CLI
   --skip-route            不自动创建 *.domain 的 DNS 路由
   --demo                  部署后启动演示服务
   -h, --help              显示帮助
@@ -52,6 +55,77 @@ require_command() {
   fi
 }
 
+install_cloudflared() {
+  if command -v cloudflared >/dev/null 2>&1; then
+    info "已找到 cloudflared：$(command -v cloudflared)"
+    return
+  fi
+
+  if [[ "$INSTALL_CLOUDFLARED" != true ]]; then
+    error "缺少命令：cloudflared"
+    exit 1
+  fi
+
+  require_command curl || exit 1
+
+  local os arch asset url install_dir tmp_dir downloaded extracted
+  os="$(uname -s)"
+  arch="$(uname -m)"
+  install_dir="${ROOT_DIR}/.easygate/bin"
+  tmp_dir="${ROOT_DIR}/.easygate/tmp/cloudflared"
+
+  case "$arch" in
+    x86_64|amd64) arch="amd64" ;;
+    arm64|aarch64) arch="arm64" ;;
+    armv7l|armv6l) arch="arm" ;;
+    i386|i686) arch="386" ;;
+    *)
+      error "暂不支持的 CPU 架构：${arch}"
+      exit 1
+      ;;
+  esac
+
+  mkdir -p "$install_dir" "$tmp_dir"
+
+  case "$os" in
+    Darwin)
+      if [[ "$arch" != "amd64" && "$arch" != "arm64" ]]; then
+        error "macOS 暂不支持的 cloudflared 架构：${arch}"
+        exit 1
+      fi
+      asset="cloudflared-darwin-${arch}.tgz"
+      url="https://github.com/cloudflare/cloudflared/releases/latest/download/${asset}"
+      downloaded="${tmp_dir}/${asset}"
+      info "下载 cloudflared：${asset}"
+      curl -fL --retry 3 --retry-delay 2 -o "$downloaded" "$url"
+      rm -rf "${tmp_dir}/extract"
+      mkdir -p "${tmp_dir}/extract"
+      tar -xzf "$downloaded" -C "${tmp_dir}/extract"
+      extracted="$(find "${tmp_dir}/extract" -type f -name cloudflared | head -n 1)"
+      if [[ -z "$extracted" ]]; then
+        error "未能从 ${asset} 中找到 cloudflared"
+        exit 1
+      fi
+      cp "$extracted" "${install_dir}/cloudflared"
+      ;;
+    Linux)
+      asset="cloudflared-linux-${arch}"
+      url="https://github.com/cloudflare/cloudflared/releases/latest/download/${asset}"
+      info "下载 cloudflared：${asset}"
+      curl -fL --retry 3 --retry-delay 2 -o "${install_dir}/cloudflared" "$url"
+      ;;
+    *)
+      error "deploy.sh 仅支持 macOS/Linux 自动安装 cloudflared；Windows 请使用 scripts/deploy.ps1"
+      exit 1
+      ;;
+  esac
+
+  chmod +x "${install_dir}/cloudflared"
+  export PATH="${install_dir}:$PATH"
+  cloudflared --version >/dev/null
+  info "cloudflared 已安装到 ${install_dir}/cloudflared"
+}
+
 find_latest_credentials() {
   local search_dir="$1"
   find "$search_dir" -maxdepth 1 -type f -name "*.json" -print0 2>/dev/null \
@@ -59,23 +133,30 @@ find_latest_credentials() {
     | head -n 1
 }
 
-for arg in "$@"; do
-  case "$arg" in
+while [[ $# -gt 0 ]]; do
+  case "$1" in
     --domain)
       shift
+      [[ $# -gt 0 ]] || { error "--domain 缺少参数值"; exit 1; }
       BASE_DOMAIN="${1:-}"
       ;;
     --tunnel)
       shift
+      [[ $# -gt 0 ]] || { error "--tunnel 缺少参数值"; exit 1; }
       TUNNEL_NAME="${1:-}"
       ;;
     --dashboard)
       shift
+      [[ $# -gt 0 ]] || { error "--dashboard 缺少参数值"; exit 1; }
       DASHBOARD_HOST="${1:-}"
       ;;
     --port)
       shift
+      [[ $# -gt 0 ]] || { error "--port 缺少参数值"; exit 1; }
       TRAEFIK_HTTP_PORT="${1:-}"
+      ;;
+    --no-install-cloudflared)
+      INSTALL_CLOUDFLARED=false
       ;;
     --skip-route)
       ROUTE_DNS=false
@@ -88,17 +169,18 @@ for arg in "$@"; do
       exit 0
       ;;
     *)
-      error "未知参数：$arg"
+      error "未知参数：$1"
       usage
       exit 1
       ;;
   esac
+  shift
 done
 
 cd "$ROOT_DIR"
 
 require_command docker || exit 1
-require_command cloudflared || exit 1
+install_cloudflared
 
 if ! docker compose version >/dev/null 2>&1; then
   error "当前 Docker 未提供 docker compose"

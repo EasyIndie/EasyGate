@@ -1,4 +1,5 @@
 .env
+.easygate/
 cloudflared/*.json
 cloudflared/config.yml
 letsencrypt/

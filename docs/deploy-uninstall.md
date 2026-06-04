@@ -4,11 +4,12 @@ EasyGate 提供跨平台部署和卸载脚本。
 
 ## 前置依赖
 
-脚本会检查依赖是否存在，但不会自动安装系统工具。请先安装：
+脚本会检查依赖是否存在。请先安装：
 
 - Docker
 - Docker Compose 插件
-- `cloudflared` CLI
+
+如果缺少 `cloudflared` CLI，一键部署脚本会自动下载到项目本地目录 `.easygate/bin/`，不会写入系统目录。
 
 ## 一键部署
 
@@ -46,7 +47,8 @@ Windows PowerShell：
 
 脚本会自动完成：
 
-- 检查 Docker、Docker Compose、`cloudflared`。
+- 检查 Docker、Docker Compose。
+- 如果缺少 `cloudflared`，自动下载项目本地 CLI。
 - 如未登录 Cloudflare，执行 `cloudflared tunnel login`。
 - 创建 Cloudflare Tunnel。
 - 尝试创建 `*.example.com` 通配 DNS 路由。
@@ -55,6 +57,16 @@ Windows PowerShell：
 - 复制 tunnel 凭据到 `cloudflared/`。
 - 启动 EasyGate。
 - 可选启动演示服务。
+
+如果你已经通过包管理器安装并维护 `cloudflared`，也可以关闭自动安装：
+
+```sh
+./scripts/deploy.sh --domain example.com --no-install-cloudflared
+```
+
+```powershell
+.\scripts\deploy.ps1 -Domain example.com -NoInstallCloudflared
+```
 
 如果自动创建 DNS 路由失败，可以在 Cloudflare DNS 中手动添加：
 
@@ -98,6 +110,7 @@ Windows PowerShell：
 彻底清理会删除：
 
 - `.env`
+- `.easygate/`
 - `cloudflared/config.yml`
 - `cloudflared/*.json`
 

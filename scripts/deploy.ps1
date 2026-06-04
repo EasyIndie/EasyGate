@@ -3,6 +3,7 @@ param(
   [string]$Tunnel = "easygate-home",
   [string]$Dashboard = "",
   [string]$Port = "18080",
+  [switch]$NoInstallCloudflared,
   [switch]$SkipRoute,
   [switch]$Demo
 )
@@ -35,6 +36,42 @@ function Require-Command {
   }
 }
 
+function Install-Cloudflared {
+  if (Get-Command cloudflared -ErrorAction SilentlyContinue) {
+    Write-Info "已找到 cloudflared：$((Get-Command cloudflared).Source)"
+    return
+  }
+
+  if ($NoInstallCloudflared) {
+    Fail "缺少命令：cloudflared"
+  }
+
+  $Arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+  switch ($Arch) {
+    "X64" { $CloudflaredArch = "amd64" }
+    "X86" { $CloudflaredArch = "386" }
+    default { Fail "暂不支持的 CPU 架构：$Arch" }
+  }
+
+  if (-not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
+    Fail "deploy.ps1 仅支持 Windows 自动安装 cloudflared；macOS/Linux 请使用 scripts/deploy.sh"
+  }
+
+  $InstallDir = Join-Path $RootDir ".easygate\bin"
+  New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+
+  $Asset = "cloudflared-windows-$CloudflaredArch.exe"
+  $Url = "https://github.com/cloudflare/cloudflared/releases/latest/download/$Asset"
+  $Target = Join-Path $InstallDir "cloudflared.exe"
+
+  Write-Info "下载 cloudflared：$Asset"
+  Invoke-WebRequest -Uri $Url -OutFile $Target
+
+  $env:PATH = "$InstallDir;$env:PATH"
+  cloudflared --version | Out-Null
+  Write-Info "cloudflared 已安装到 $Target"
+}
+
 function Prompt-Default {
   param(
     [string]$Prompt,
@@ -58,7 +95,7 @@ function Find-LatestCredential {
 }
 
 Require-Command "docker"
-Require-Command "cloudflared"
+Install-Cloudflared
 
 try {
   docker compose version | Out-Null

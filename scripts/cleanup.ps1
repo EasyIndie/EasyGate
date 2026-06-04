@@ -52,10 +52,11 @@ if ($Confirm -ne "yes") {
 
 @(
   ".env",
+  ".easygate",
   "cloudflared/config.yml"
 ) | ForEach-Object {
   if (Test-Path $_) {
-    Remove-Item $_ -Force
+    Remove-Item $_ -Recurse -Force
     Write-Info "已删除 $_"
   }
 }

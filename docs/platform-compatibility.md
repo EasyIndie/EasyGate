@@ -10,13 +10,13 @@ EasyGate 的 Docker Compose 项目可以兼容：
 
 推荐部署方式：
 
-- macOS：Docker Desktop + `cloudflared` CLI + `make up`
-- Linux：Docker Engine + Docker Compose 插件 + `cloudflared` CLI + `make up`
-- Windows 11：Docker Desktop + WSL2 后端 + `cloudflared` CLI + PowerShell
+- macOS：Docker Desktop + 一键部署脚本
+- Linux：Docker Engine + Docker Compose 插件 + 一键部署脚本
+- Windows 11：Docker Desktop + WSL2 后端 + PowerShell 一键部署脚本
 
 Tunnel 创建步骤见 `docs/create-cloudflare-tunnel.md`。
 
-EasyGate 不会自动安装 Docker、Docker Compose 或 `cloudflared`。请先按对应平台安装这些工具，再运行 `make up` 或 `docker compose up -d`。
+EasyGate 不会自动安装 Docker 或 Docker Compose。部署脚本会在缺少 `cloudflared` CLI 时自动下载到 `.easygate/bin/`。
 
 ## macOS
 
