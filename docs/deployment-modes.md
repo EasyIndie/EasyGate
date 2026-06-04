@@ -57,6 +57,40 @@ http:
 
 这种模式下，其他设备不需要安装 Docker，也不需要安装 cloudflared 或 Traefik，只要入口设备能访问它们的局域网地址即可。
 
+## 多台设备使用同一个域名
+
+不建议多台设备各自独立部署 EasyGate，并同时在 Cloudflare 中绑定同一个通配入口：
+
+```text
+*.example.com -> http://traefik:80
+```
+
+原因是 Cloudflare 侧的 hostname 路由属于全局入口，同一个 hostname 或通配 hostname 不应该被多套互相独立的 EasyGate 同时接管。否则容易出现：
+
+- 路由冲突或配置覆盖。
+- 请求被分发到没有对应服务的设备。
+- 多台设备使用同一个 tunnel token 时，Cloudflare 可能把它们当作同一个 tunnel 的多个 connector，从而形成负载均衡效果；这只适合同构副本，不适合每台设备承载不同服务。
+- 排查故障时很难判断请求最终落到了哪台设备。
+
+Docker 网络名和容器名只在单台设备内生效，所以它们本身不会跨设备冲突。真正需要避免的是 Cloudflare hostname 和 tunnel 路由冲突。
+
+推荐两种安全做法：
+
+1. 单入口模式：只在一台稳定设备上部署 EasyGate，并让它反代局域网内其他设备的服务。
+2. 多入口模式：每台设备使用互不重叠的主机名，例如：
+
+   ```text
+   nas-api.example.com
+   mini-api.example.com
+   win-api.example.com
+   test-nas-api.example.com
+   test-mini-api.example.com
+   ```
+
+在 Cloudflare Free 下，建议继续使用一级子域名，不使用 `api.nas.example.com` 这类更深层级域名。
+
+只有当多台设备部署的是完全相同的一组服务，并且你明确希望它们作为高可用副本时，才适合让它们共用同一个 tunnel 和同一组 hostname。
+
 ## 模式三：非 Docker 设备原生安装
 
 适合不方便安装 Docker，但可以安装系统服务的设备。

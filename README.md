@@ -1,5 +1,7 @@
 # EasyGate
 
+[![CI](https://github.com/EasyIndie/EasyGate/actions/workflows/ci.yml/badge.svg)](https://github.com/EasyIndie/EasyGate/actions/workflows/ci.yml)
+
 EasyGate 是一个基于 Cloudflare Free + Traefik 的轻量入口网关，用于把家庭实验室或一人公司的多个服务通过 HTTPS 暴露到公网，并且不需要在路由器上做端口转发。
 
 公网访问流量路径：
@@ -177,6 +179,7 @@ Traefik 会监听这个目录，并自动重载 file provider 路由。
 
 - 不要为这套服务开放路由器端口。
 - 保持 `cloudflared` 和 Traefik 在同一个 Docker 网络中，这样 tunnel 才能访问 `http://traefik:80`。
+- 不建议多台设备独立接管同一个 `*.example.com`；多设备部署建议使用单入口反代，或为每台设备分配不重叠的一级子域名。
 - 使用 `traefik.example.com` 前，先用 Cloudflare Access 保护 Traefik dashboard。
 - 如果部署在 Linux 上，`host.docker.internal` 由 `docker-compose.yml` 中的 `extra_hosts: host-gateway` 提供。
 - 如果某个主机名应该是私有的，请在 Cloudflare Access 中强制登录；labels 和 file-provider 配置只负责创建路由。
