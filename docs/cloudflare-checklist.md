@@ -24,6 +24,8 @@
   *.example.com -> http://traefik:80
   ```
 
+- 已有的具体 DNS 记录会优先于通配记录。`*.example.com` 只会接管没有单独配置的子域名。
+- 如果某个域名不需要进入 EasyGate，请在 Cloudflare DNS 中为它保留或创建具体记录。
 - 不要开放路由器的 80 或 443 入站端口。
 
 ## 冒烟测试

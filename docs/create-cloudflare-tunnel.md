@@ -61,6 +61,36 @@ Target: <TUNNEL_ID>.cfargotunnel.com
 Proxy:  Proxied
 ```
 
+### 已有域名解析会不会受影响
+
+一般不会影响已有的具体解析记录。
+
+Cloudflare 的通配 DNS 记录只会在查询的主机名没有更具体记录时生效。例如你配置了：
+
+```text
+*.example.com -> tunnel
+```
+
+同时已有：
+
+```text
+www.example.com  -> 现有网站
+mail.example.com -> 邮件服务
+cdn.example.com  -> 其他云服务
+```
+
+那么 `www.example.com`、`mail.example.com`、`cdn.example.com` 会继续使用它们自己的具体 DNS 记录，不会被 `*.example.com` 接管。
+
+通配入口只会接住没有单独配置的名称，例如：
+
+```text
+api.example.com
+test-api.example.com
+new-service.example.com
+```
+
+如果某个子域名不需要进入 EasyGate，请在 Cloudflare DNS 中为它创建具体记录。具体记录会优先于通配记录。
+
 ## 5. 配置 EasyGate
 
 复制模板：
