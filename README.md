@@ -105,6 +105,8 @@ test.api.example.com
 
 ```sh
 make up      # 启动核心服务
+make local-up # 本机验收，不启动 cloudflared
+make local-acceptance # 自动运行本机路由验收
 make logs    # 查看 Traefik 和 cloudflared 日志
 make ps      # 查看容器状态
 make demo    # 启动演示服务
@@ -221,6 +223,12 @@ Windows 11 PowerShell：
 .\scripts\test.ps1
 ```
 
+本机路由验收：
+
+```sh
+make local-acceptance
+```
+
 GitHub Actions 会在 Ubuntu、macOS、Windows 上运行 CI，防止脚本、Compose 配置、文档链接和跨平台入口被改坏。
 
 ## 文档索引
@@ -228,6 +236,7 @@ GitHub Actions 会在 Ubuntu、macOS、Windows 上运行 CI，防止脚本、Com
 - [Cloudflare 配置清单](docs/cloudflare-checklist.md)
 - [创建 Cloudflare Tunnel](docs/create-cloudflare-tunnel.md)
 - [Cloudflare Free 限制说明](docs/cloudflare-free-limits.md)
+- [本机测试验收](docs/local-acceptance.md)
 - [清理部署](docs/cleanup.md)
 - [部署模式](docs/deployment-modes.md)
 - [平台兼容性](docs/platform-compatibility.md)

@@ -25,13 +25,16 @@ Write-Info "检查关键文件"
 @(
   ".env.example",
   "docker-compose.yml",
+  "docker-compose.local.yml",
   "traefik/traefik.yml",
   "traefik/dynamic/localhost-services.yml",
   "cloudflared/config.yml.example",
   "scripts/test.sh",
   "scripts/test.ps1",
   "scripts/cleanup.sh",
-  "scripts/cleanup.ps1"
+  "scripts/cleanup.ps1",
+  "scripts/local-acceptance.sh",
+  "scripts/local-acceptance.ps1"
 ) | ForEach-Object { Require-File $_ }
 
 Write-Info "检查旧项目名残留"
@@ -57,6 +60,13 @@ $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scri
 if ($ParseErrors) {
   $ParseErrors | Format-List
   Fail "cleanup.ps1 存在语法错误"
+}
+
+$ParseErrors = $null
+$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/local-acceptance.ps1), [ref]$ParseErrors)
+if ($ParseErrors) {
+  $ParseErrors | Format-List
+  Fail "local-acceptance.ps1 存在语法错误"
 }
 
 Write-Info "检查 .env.example 默认值"

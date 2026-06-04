@@ -32,6 +32,7 @@ Windows 11 PowerShell：
 - Docker Compose 配置是否能渲染。
 - PowerShell 测试脚本语法。
 - 清理脚本语法。
+- 本机验收脚本语法。
 
 ## 可选依赖
 
@@ -59,7 +60,7 @@ macos-latest：make test
 windows-latest：.\scripts\test.ps1
 ```
 
-CI 用于防止后续迭代破坏 Compose 配置、脚本语法、命名约定、文档链接和跨平台入口。
+CI 还会运行本机验收脚本。Ubuntu 强制跑完整容器级验收；macOS 和 Windows 在 Docker daemon 不可用时会跳过运行时验收，但仍覆盖入口脚本兼容性。
 
 ## 后续可扩展测试
 

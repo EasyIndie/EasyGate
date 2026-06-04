@@ -1,9 +1,22 @@
 COMPOSE=docker compose
+LOCAL_COMPOSE=docker compose -f docker-compose.local.yml --env-file .env
 
-.PHONY: test up down cleanup purge demo config logs ps
+.PHONY: test local-acceptance local-up local-down local-logs up down cleanup purge demo config logs ps
 
 test:
 	./scripts/test.sh
+
+local-acceptance:
+	./scripts/local-acceptance.sh
+
+local-up:
+	$(LOCAL_COMPOSE) up -d
+
+local-down:
+	$(LOCAL_COMPOSE) down
+
+local-logs:
+	$(LOCAL_COMPOSE) logs -f traefik demo-api demo-test-api
 
 up:
 	$(COMPOSE) up -d

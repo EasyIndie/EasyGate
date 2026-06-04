@@ -23,6 +23,11 @@ jobs:
       - name: Run tests
         run: make test
 
+      - name: Run local acceptance
+        env:
+          EASYGATE_ACCEPTANCE_STRICT: ${{ matrix.os == 'ubuntu-latest' && 'true' || 'false' }}
+        run: ./scripts/local-acceptance.sh
+
   windows:
     name: windows-latest / powershell
     runs-on: windows-latest
@@ -34,3 +39,9 @@ jobs:
       - name: Run PowerShell tests
         shell: pwsh
         run: .\scripts\test.ps1
+
+      - name: Run local acceptance
+        shell: pwsh
+        env:
+          EASYGATE_ACCEPTANCE_STRICT: "false"
+        run: .\scripts\local-acceptance.ps1

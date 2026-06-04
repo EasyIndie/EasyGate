@@ -1,0 +1,21 @@
+services:
+  traefik:
+    extends:
+      file: docker-compose.yml
+      service: traefik
+
+  demo-api:
+    extends:
+      file: docker-compose.yml
+      service: demo-api
+    profiles: []
+
+  demo-test-api:
+    extends:
+      file: docker-compose.yml
+      service: demo-test-api
+    profiles: []
+
+networks:
+  easygate-proxy:
+    name: easygate-proxy
