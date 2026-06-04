@@ -88,7 +88,7 @@ pwsh -NoProfile -File "$BinDir/docker.ps1" "`$@"
 #!/usr/bin/env sh
 pwsh -NoProfile -File "$BinDir/cloudflared.ps1" "`$@"
 "@ | Set-Content -Path (Join-Path $BinDir "cloudflared") -Encoding UTF8
-    chmod +x (Join-Path $BinDir "docker") (Join-Path $BinDir "cloudflared")
+    chmod +x "$(Join-Path $BinDir "docker")" "$(Join-Path $BinDir "cloudflared")"
   }
 }
 
