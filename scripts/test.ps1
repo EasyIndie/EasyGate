@@ -143,6 +143,12 @@ $DeployPs = Get-Content -Raw scripts/deploy.ps1
 if ($DeploySh -notmatch "--no-install-cloudflared") {
   Fail "deploy.sh 缺少 cloudflared 自动安装开关"
 }
+if ($DeploySh -notmatch "EASYGATE_CLOUDFLARED_HOME") {
+  Fail "deploy.sh 缺少 cloudflared home 覆盖入口"
+}
+if ($DeployPs -notmatch "EASYGATE_CLOUDFLARED_HOME") {
+  Fail "deploy.ps1 缺少 cloudflared home 覆盖入口"
+}
 if ($DeploySh -notmatch "cloudflared-linux-") {
   Fail "deploy.sh 缺少 Linux cloudflared 下载逻辑"
 }
@@ -151,6 +157,15 @@ if ($DeploySh -notmatch "cloudflared-darwin-") {
 }
 if ($DeployPs -notmatch "cloudflared-windows-") {
   Fail "deploy.ps1 缺少 Windows cloudflared 下载逻辑"
+}
+
+Write-Info "检查 GitHub Actions Node 24 兼容配置"
+$WorkflowText = Get-Content -Raw ".github/workflows/ci.yml"
+if ($WorkflowText -notmatch "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24") {
+  Fail "CI 缺少 Node 24 opt-in"
+}
+if ($WorkflowText -notmatch "actions/checkout@v6") {
+  Fail "CI 未使用支持 Node 24 的 checkout 版本"
 }
 
 Write-Info "检查文档链接文件是否存在"

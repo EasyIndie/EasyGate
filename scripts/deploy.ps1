@@ -13,6 +13,13 @@ $ErrorActionPreference = "Stop"
 $RootDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $RootDir
 
+$CloudflaredHome = if (-not [string]::IsNullOrWhiteSpace($env:EASYGATE_CLOUDFLARED_HOME)) {
+  $env:EASYGATE_CLOUDFLARED_HOME
+}
+else {
+  Join-Path $HOME ".cloudflared"
+}
+
 function Write-Info {
   param([string]$Message)
   Write-Host "[deploy] $Message" -ForegroundColor Blue
@@ -123,7 +130,6 @@ if ([string]::IsNullOrWhiteSpace($Dashboard)) {
   $Dashboard = "traefik.$Domain"
 }
 
-$CloudflaredHome = Join-Path $HOME ".cloudflared"
 $CertFile = Join-Path $CloudflaredHome "cert.pem"
 
 Write-Info "确认 cloudflared 登录状态"

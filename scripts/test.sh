@@ -85,9 +85,15 @@ grep -q "traefik.docker.network=easygate-proxy" examples/docker-service.compose.
 
 info "检查 cloudflared 自动安装入口"
 grep -q -- "--no-install-cloudflared" scripts/deploy.sh || fail "deploy.sh 缺少 cloudflared 自动安装开关"
+grep -q "EASYGATE_CLOUDFLARED_HOME" scripts/deploy.sh || fail "deploy.sh 缺少 cloudflared home 覆盖入口"
+grep -q "EASYGATE_CLOUDFLARED_HOME" scripts/deploy.ps1 || fail "deploy.ps1 缺少 cloudflared home 覆盖入口"
 grep -q "cloudflared-linux-" scripts/deploy.sh || fail "deploy.sh 缺少 Linux cloudflared 下载逻辑"
 grep -q "cloudflared-darwin-" scripts/deploy.sh || fail "deploy.sh 缺少 macOS cloudflared 下载逻辑"
 grep -q "cloudflared-windows-" scripts/deploy.ps1 || fail "deploy.ps1 缺少 Windows cloudflared 下载逻辑"
+
+info "检查 GitHub Actions Node 24 兼容配置"
+grep -q "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24" .github/workflows/ci.yml || fail "CI 缺少 Node 24 opt-in"
+grep -q "actions/checkout@v6" .github/workflows/ci.yml || fail "CI 未使用支持 Node 24 的 checkout 版本"
 
 info "检查文档链接文件是否存在"
 while IFS=$'\t' read -r source link; do

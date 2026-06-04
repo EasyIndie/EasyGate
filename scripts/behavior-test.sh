@@ -99,7 +99,7 @@ run_deploy_behavior_test() {
 
   (
     cd "$fixture"
-    HOME="$home" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" \
+    HOME="$home" EASYGATE_CLOUDFLARED_HOME="${home}/.cloudflared" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" \
       bash scripts/deploy.sh --domain example.test --skip-route --demo --no-install-cloudflared
   )
 

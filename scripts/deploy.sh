@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CLOUDFLARED_HOME="${EASYGATE_CLOUDFLARED_HOME:-${HOME}/.cloudflared}"
 BASE_DOMAIN="${BASE_DOMAIN:-}"
 TUNNEL_NAME="${TUNNEL_NAME:-easygate-home}"
 DASHBOARD_HOST="${TRAEFIK_DASHBOARD_HOST:-}"
@@ -206,8 +207,8 @@ if [[ -z "$DASHBOARD_HOST" ]]; then
 fi
 
 info "确认 cloudflared 登录状态"
-if [[ ! -f "${HOME}/.cloudflared/cert.pem" ]]; then
-  warn "未找到 ${HOME}/.cloudflared/cert.pem，将执行 cloudflared tunnel login"
+if [[ ! -f "${CLOUDFLARED_HOME}/cert.pem" ]]; then
+  warn "未找到 ${CLOUDFLARED_HOME}/cert.pem，将执行 cloudflared tunnel login"
   cloudflared tunnel login
 else
   info "已找到 cloudflared 登录凭据"
@@ -215,14 +216,14 @@ fi
 
 mkdir -p cloudflared
 
-before_credentials="$(find_latest_credentials "${HOME}/.cloudflared" || true)"
+before_credentials="$(find_latest_credentials "${CLOUDFLARED_HOME}" || true)"
 
 info "创建 Cloudflare Tunnel：${TUNNEL_NAME}"
 if ! cloudflared tunnel create "$TUNNEL_NAME"; then
   warn "创建 tunnel 失败。若 tunnel 已存在，将尝试复用本地最新凭据文件。"
 fi
 
-after_credentials="$(find_latest_credentials "${HOME}/.cloudflared" || true)"
+after_credentials="$(find_latest_credentials "${CLOUDFLARED_HOME}" || true)"
 credentials_source="${after_credentials:-$before_credentials}"
 
 if [[ -z "$credentials_source" || ! -f "$credentials_source" ]]; then

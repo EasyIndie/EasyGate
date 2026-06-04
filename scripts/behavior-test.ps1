@@ -123,8 +123,8 @@ function Test-DeployBehavior {
   Set-Content -Path (Join-Path $HomeDir ".cloudflared/0000.json") -Value '{"source":"new"}'
   Set-Content -Path (Join-Path $Fixture "cloudflared/easygate-home.json") -Value '{"source":"old"}'
 
-  $OldHome = $env:HOME
-  $env:HOME = $HomeDir
+  $OldCloudflaredHome = $env:EASYGATE_CLOUDFLARED_HOME
+  $env:EASYGATE_CLOUDFLARED_HOME = Join-Path $HomeDir ".cloudflared"
   try {
     Invoke-WithMockPath $BinDir {
       Push-Location $Fixture
@@ -137,7 +137,7 @@ function Test-DeployBehavior {
     }
   }
   finally {
-    $env:HOME = $OldHome
+    $env:EASYGATE_CLOUDFLARED_HOME = $OldCloudflaredHome
   }
 
   Assert-Contains (Join-Path $Fixture ".env") "BASE_DOMAIN=example.test"
