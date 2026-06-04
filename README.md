@@ -132,6 +132,7 @@ make down              # 停止并移除 Compose 容器和网络
 make cleanup           # 同 make down，保留本地配置和凭据
 make purge             # 删除本地生成配置、本地 CLI 和 tunnel 凭据
 make test              # 静态检查
+make behavior-test     # 部署和清理脚本行为测试
 make local-acceptance  # 本机路由验收
 ```
 

@@ -24,6 +24,8 @@ function Require-File {
 Write-Info "检查关键文件"
 @(
   ".env.example",
+  ".github/dependabot.yml",
+  ".github/workflows/ci.yml",
   "docker-compose.yml",
   "docker-compose.local.yml",
   "traefik/traefik.yml",
@@ -38,7 +40,9 @@ Write-Info "检查关键文件"
   "scripts/uninstall.sh",
   "scripts/uninstall.ps1",
   "scripts/local-acceptance.sh",
-  "scripts/local-acceptance.ps1"
+  "scripts/local-acceptance.ps1",
+  "scripts/behavior-test.sh",
+  "scripts/behavior-test.ps1"
 ) | ForEach-Object { Require-File $_ }
 
 Write-Info "检查旧项目名残留"
@@ -85,6 +89,13 @@ $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scri
 if ($ParseErrors) {
   $ParseErrors | Format-List
   Fail "local-acceptance.ps1 存在语法错误"
+}
+
+$ParseErrors = $null
+$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/behavior-test.ps1), [ref]$ParseErrors)
+if ($ParseErrors) {
+  $ParseErrors | Format-List
+  Fail "behavior-test.ps1 存在语法错误"
 }
 
 Write-Info "检查 .env.example 默认值"
@@ -144,19 +155,39 @@ if ($DeployPs -notmatch "cloudflared-windows-") {
 
 Write-Info "检查文档链接文件是否存在"
 $DocFiles = @("README.md") + (Get-ChildItem docs -Filter "*.md" | ForEach-Object { $_.FullName })
-$Links = @()
 foreach ($File in $DocFiles) {
   $Text = Get-Content -Raw $File
-  $Matches = [regex]::Matches($Text, "docs/[A-Za-z0-9._/-]+\.md")
+  $Matches = [regex]::Matches($Text, "\[[^\]]+\]\(([^)]+)\)")
   foreach ($Match in $Matches) {
-    $Links += $Match.Value
+    $Link = $Match.Groups[1].Value
+    if ($Link -match "^(https?://|mailto:|#)" -or [string]::IsNullOrWhiteSpace($Link)) {
+      continue
+    }
+
+    $PathOnly = ($Link -split "#", 2)[0]
+    if (-not $PathOnly.EndsWith(".md")) {
+      continue
+    }
+
+    if ($PathOnly.StartsWith("docs/")) {
+      $Target = $PathOnly
+    }
+    else {
+      $SourceDir = Split-Path -Parent $File
+      if ([string]::IsNullOrWhiteSpace($SourceDir)) {
+        $SourceDir = "."
+      }
+      $Target = Join-Path $SourceDir $PathOnly
+    }
+
+    if (-not (Test-Path $Target -PathType Leaf)) {
+      Fail "文档链接指向不存在的文件：$File -> $Link"
+    }
   }
 }
-$Links | Sort-Object -Unique | ForEach-Object {
-  if (-not (Test-Path $_ -PathType Leaf)) {
-    Fail "文档链接指向不存在的文件：$_"
-  }
-}
+
+Write-Info "运行 PowerShell 行为测试"
+& ".\scripts\behavior-test.ps1"
 
 Write-Info "检查 Docker Compose 配置"
 if (Get-Command docker -ErrorAction SilentlyContinue) {

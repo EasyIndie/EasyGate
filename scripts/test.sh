@@ -24,6 +24,8 @@ require_file() {
 
 info "检查关键文件"
 require_file ".env.example"
+require_file ".github/dependabot.yml"
+require_file ".github/workflows/ci.yml"
 require_file "docker-compose.yml"
 require_file "docker-compose.local.yml"
 require_file "traefik/traefik.yml"
@@ -39,6 +41,8 @@ require_file "scripts/uninstall.sh"
 require_file "scripts/uninstall.ps1"
 require_file "scripts/local-acceptance.sh"
 require_file "scripts/local-acceptance.ps1"
+require_file "scripts/behavior-test.sh"
+require_file "scripts/behavior-test.ps1"
 
 info "检查旧项目名残留"
 if grep -R "[E]asyTLS\|[e]asytls\|[E]ASYTLS" \
@@ -54,6 +58,20 @@ bash -n scripts/cleanup.sh
 bash -n scripts/deploy.sh
 bash -n scripts/uninstall.sh
 bash -n scripts/local-acceptance.sh
+bash -n scripts/behavior-test.sh
+
+if command -v shellcheck >/dev/null 2>&1; then
+  info "使用 ShellCheck 检查 Bash 脚本"
+  shellcheck \
+    scripts/test.sh \
+    scripts/cleanup.sh \
+    scripts/deploy.sh \
+    scripts/uninstall.sh \
+    scripts/local-acceptance.sh \
+    scripts/behavior-test.sh
+else
+  warn "未找到 shellcheck，跳过 Bash lint"
+fi
 
 info "检查 .env.example 默认值"
 grep -q "^BASE_DOMAIN=example.com$" .env.example || fail ".env.example 缺少 BASE_DOMAIN 默认值"
@@ -72,15 +90,33 @@ grep -q "cloudflared-darwin-" scripts/deploy.sh || fail "deploy.sh 缺少 macOS 
 grep -q "cloudflared-windows-" scripts/deploy.ps1 || fail "deploy.ps1 缺少 Windows cloudflared 下载逻辑"
 
 info "检查文档链接文件是否存在"
-while IFS= read -r link; do
-  [[ -f "${link}" ]] || fail "文档链接指向不存在的文件：${link}"
-done < <(grep -Roh 'docs/[A-Za-z0-9._/-]*\.md' README.md docs | sort -u)
+while IFS=$'\t' read -r source link; do
+  [[ -n "${source}" && -n "${link}" ]] || continue
+  case "$link" in
+    http://*|https://*|mailto:*|\#*|"") continue ;;
+  esac
+
+  path="${link%%#*}"
+  [[ "$path" == *.md ]] || continue
+
+  if [[ "$path" == docs/* ]]; then
+    target="$path"
+  else
+    target="$(dirname "$source")/$path"
+  fi
+  [[ -f "$target" ]] || fail "文档链接指向不存在的文件：${source} -> ${link}"
+done < <(perl -ne 'while (/\[[^\]]+\]\(([^)]+)\)/g) { print "$ARGV\t$1\n" }' README.md docs/*.md | sort -u)
+
+info "运行 Bash 行为测试"
+bash scripts/behavior-test.sh
 
 if command -v ruby >/dev/null 2>&1; then
   info "使用 Ruby 检查 YAML 语法"
   ruby -e 'require "yaml"; ARGV.each { |f| YAML.load_file(f); puts "ok #{f}" }' \
     docker-compose.yml \
     docker-compose.local.yml \
+    .github/dependabot.yml \
+    .github/workflows/ci.yml \
     traefik/traefik.yml \
     traefik/dynamic/localhost-services.yml \
     cloudflared/config.yml.example \
@@ -103,6 +139,8 @@ if command -v pwsh >/dev/null 2>&1; then
   pwsh -NoProfile -Command '$errors = $null; $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/deploy.ps1), [ref]$errors); if ($errors) { $errors | Format-List; exit 1 }'
   pwsh -NoProfile -Command '$errors = $null; $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/uninstall.ps1), [ref]$errors); if ($errors) { $errors | Format-List; exit 1 }'
   pwsh -NoProfile -Command '$errors = $null; $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/local-acceptance.ps1), [ref]$errors); if ($errors) { $errors | Format-List; exit 1 }'
+  pwsh -NoProfile -Command '$errors = $null; $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/behavior-test.ps1), [ref]$errors); if ($errors) { $errors | Format-List; exit 1 }'
+  pwsh -NoProfile -File scripts/behavior-test.ps1
 else
   warn "未找到 pwsh，跳过 PowerShell 语法检查"
 fi
