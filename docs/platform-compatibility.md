@@ -16,6 +16,8 @@ EasyGate 的 Docker Compose 项目可以兼容：
 
 Tunnel 创建步骤见 `docs/create-cloudflare-tunnel.md`。
 
+EasyGate 不会自动安装 Docker、Docker Compose 或 `cloudflared`。请先按对应平台安装这些工具，再运行 `make up` 或 `docker compose up -d`。
+
 ## macOS
 
 要求：

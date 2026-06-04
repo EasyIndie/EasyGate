@@ -33,6 +33,10 @@ Write-Info "检查关键文件"
   "scripts/test.ps1",
   "scripts/cleanup.sh",
   "scripts/cleanup.ps1",
+  "scripts/deploy.sh",
+  "scripts/deploy.ps1",
+  "scripts/uninstall.sh",
+  "scripts/uninstall.ps1",
   "scripts/local-acceptance.sh",
   "scripts/local-acceptance.ps1"
 ) | ForEach-Object { Require-File $_ }
@@ -60,6 +64,20 @@ $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scri
 if ($ParseErrors) {
   $ParseErrors | Format-List
   Fail "cleanup.ps1 存在语法错误"
+}
+
+$ParseErrors = $null
+$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/deploy.ps1), [ref]$ParseErrors)
+if ($ParseErrors) {
+  $ParseErrors | Format-List
+  Fail "deploy.ps1 存在语法错误"
+}
+
+$ParseErrors = $null
+$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/uninstall.ps1), [ref]$ParseErrors)
+if ($ParseErrors) {
+  $ParseErrors | Format-List
+  Fail "uninstall.ps1 存在语法错误"
 }
 
 $ParseErrors = $null
