@@ -48,7 +48,7 @@ make local-up
 等价命令：
 
 ```sh
-docker compose -f docker-compose.local.yml --env-file .env up -d
+docker compose -f docker-compose.local.yml --env-file .env --profile demo up -d
 ```
 
 ## 4. 验证 Docker 自动发现

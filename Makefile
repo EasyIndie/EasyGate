@@ -1,5 +1,5 @@
 COMPOSE=docker compose
-LOCAL_COMPOSE=docker compose -f docker-compose.local.yml --env-file .env
+LOCAL_COMPOSE=docker compose -f docker-compose.local.yml --env-file .env --profile demo
 
 .PHONY: deploy uninstall test local-acceptance local-up local-down local-logs up down cleanup purge demo config logs ps
 

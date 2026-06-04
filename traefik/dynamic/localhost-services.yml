@@ -1,28 +1,30 @@
-http:
-  routers:
-    # 直接运行在 Docker 宿主机上的服务示例：
-    #   http://127.0.0.1:8080 -> https://local-api.example.com
-    #
-    # 启用这段配置时，请修改 router、host 和 service 名称。
-    # local-api:
-    #   rule: Host(`local-api.example.com`)
-    #   entryPoints:
-    #     - web
-    #   service: local-api
-    #
-    # test-local-api:
-    #   rule: Host(`test-local-api.example.com`)
-    #   entryPoints:
-    #     - web
-    #   service: test-local-api
-
-  services:
-    # local-api:
-    #   loadBalancer:
-    #     servers:
-    #       - url: http://host.docker.internal:8080
-    #
-    # test-local-api:
-    #   loadBalancer:
-    #     servers:
-    #       - url: http://host.docker.internal:18080
+# 直接运行在 Docker 宿主机上的服务示例：
+#   http://127.0.0.1:8080 -> https://local-api.example.com
+#
+# 默认保持本文件为纯注释，避免 Traefik 加载空的动态 http 配置时报错。
+# 启用这段配置时，请取消下面整段注释，并修改 router、host 和 service 名称。
+#
+# http:
+#   routers:
+#     local-api:
+#       rule: Host(`local-api.example.com`)
+#       entryPoints:
+#         - web
+#       service: local-api
+#
+#     test-local-api:
+#       rule: Host(`test-local-api.example.com`)
+#       entryPoints:
+#         - web
+#       service: test-local-api
+#
+#   services:
+#     local-api:
+#       loadBalancer:
+#         servers:
+#           - url: http://host.docker.internal:8080
+#
+#     test-local-api:
+#       loadBalancer:
+#         servers:
+#           - url: http://host.docker.internal:18080

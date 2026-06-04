@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STRICT="${EASYGATE_ACCEPTANCE_STRICT:-false}"
-COMPOSE=(docker compose -f docker-compose.local.yml --env-file .env)
+COMPOSE=(docker compose -f docker-compose.local.yml --env-file .env --profile demo)
 TRAEFIK_HTTP_PORT="${TRAEFIK_HTTP_PORT:-18080}"
 
 info() {
@@ -74,7 +74,10 @@ set -a
 # shellcheck disable=SC1091
 source .env
 set +a
+BASE_DOMAIN="${BASE_DOMAIN:-example.com}"
 TRAEFIK_HTTP_PORT="${TRAEFIK_HTTP_PORT:-18080}"
+PROD_HOST="api.${BASE_DOMAIN}"
+TEST_HOST="test-api.${BASE_DOMAIN}"
 
 trap cleanup EXIT
 
@@ -84,7 +87,7 @@ compose_up
 info "等待 Traefik 就绪"
 ready=false
 for _ in {1..30}; do
-  if curl -fsS -H "Host: api.example.com" "http://127.0.0.1:${TRAEFIK_HTTP_PORT}" >/dev/null 2>&1; then
+  if curl -fsS -H "Host: ${PROD_HOST}" "http://127.0.0.1:${TRAEFIK_HTTP_PORT}" >/dev/null 2>&1; then
     ready=true
     break
   fi
@@ -98,10 +101,10 @@ if [[ "$ready" != "true" ]]; then
 fi
 
 info "验证生产 demo 路由"
-request "api.example.com" | grep -q "Hostname:" || skip_or_fail "api.example.com 未返回 whoami 响应"
+request "${PROD_HOST}" | grep -q "Hostname:" || skip_or_fail "${PROD_HOST} 未返回 whoami 响应"
 
 info "验证测试 demo 路由"
-request "test-api.example.com" | grep -q "Hostname:" || skip_or_fail "test-api.example.com 未返回 whoami 响应"
+request "${TEST_HOST}" | grep -q "Hostname:" || skip_or_fail "${TEST_HOST} 未返回 whoami 响应"
 
 info "验证未配置域名返回 404"
 status="$(curl -sS -o /dev/null -w '%{http_code}' -H "Host: missing.example.com" "http://127.0.0.1:${TRAEFIK_HTTP_PORT}")"

@@ -2,8 +2,9 @@ $ErrorActionPreference = "Stop"
 
 $RootDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $Strict = $env:EASYGATE_ACCEPTANCE_STRICT -eq "true"
-$ComposeArgs = @("compose", "-f", "docker-compose.local.yml", "--env-file", ".env")
+$ComposeArgs = @("compose", "-f", "docker-compose.local.yml", "--env-file", ".env", "--profile", "demo")
 $TraefikHttpPort = "18080"
+$BaseDomain = "example.com"
 
 function Write-Info {
   param([string]$Message)
@@ -99,10 +100,18 @@ Get-Content ".env" | ForEach-Object {
     return
   }
   $Parts = $Line.Split("=", 2)
-  if ($Parts.Length -eq 2 -and $Parts[0] -eq "TRAEFIK_HTTP_PORT" -and $Parts[1] -ne "") {
-    $script:TraefikHttpPort = $Parts[1]
+  if ($Parts.Length -eq 2 -and $Parts[1] -ne "") {
+    if ($Parts[0] -eq "TRAEFIK_HTTP_PORT") {
+      $script:TraefikHttpPort = $Parts[1]
+    }
+    if ($Parts[0] -eq "BASE_DOMAIN") {
+      $script:BaseDomain = $Parts[1]
+    }
   }
 }
+
+$ProdHost = "api.$BaseDomain"
+$TestHost = "test-api.$BaseDomain"
 
 try {
   Write-Info "启动本机验收栈"
@@ -112,7 +121,7 @@ try {
   $Ready = $false
   for ($i = 0; $i -lt 30; $i++) {
     try {
-      $Response = Request-Text "api.example.com"
+      $Response = Request-Text $ProdHost
       if ($Response.Content -match "Hostname:") {
         $Ready = $true
         break
@@ -134,15 +143,15 @@ try {
   }
 
   Write-Info "验证生产 demo 路由"
-  $Api = Request-Text "api.example.com"
+  $Api = Request-Text $ProdHost
   if ($Api.Content -notmatch "Hostname:") {
-    Skip-Or-Fail "api.example.com 未返回 whoami 响应"
+    Skip-Or-Fail "$ProdHost 未返回 whoami 响应"
   }
 
   Write-Info "验证测试 demo 路由"
-  $TestApi = Request-Text "test-api.example.com"
+  $TestApi = Request-Text $TestHost
   if ($TestApi.Content -notmatch "Hostname:") {
-    Skip-Or-Fail "test-api.example.com 未返回 whoami 响应"
+    Skip-Or-Fail "$TestHost 未返回 whoami 响应"
   }
 
   Write-Info "验证未配置域名返回 404"
