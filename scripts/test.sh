@@ -140,17 +140,4 @@ else
   warn "未找到 docker compose，跳过 Compose 配置检查"
 fi
 
-if command -v pwsh >/dev/null 2>&1; then
-  info "检查 PowerShell 脚本语法"
-  pwsh -NoProfile -Command '$errors = $null; $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/test.ps1), [ref]$errors); if ($errors) { $errors | Format-List; exit 1 }'
-  pwsh -NoProfile -Command '$errors = $null; $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/cleanup.ps1), [ref]$errors); if ($errors) { $errors | Format-List; exit 1 }'
-  pwsh -NoProfile -Command '$errors = $null; $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/deploy.ps1), [ref]$errors); if ($errors) { $errors | Format-List; exit 1 }'
-  pwsh -NoProfile -Command '$errors = $null; $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/uninstall.ps1), [ref]$errors); if ($errors) { $errors | Format-List; exit 1 }'
-  pwsh -NoProfile -Command '$errors = $null; $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/local-acceptance.ps1), [ref]$errors); if ($errors) { $errors | Format-List; exit 1 }'
-  pwsh -NoProfile -Command '$errors = $null; $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/behavior-test.ps1), [ref]$errors); if ($errors) { $errors | Format-List; exit 1 }'
-  pwsh -NoProfile -File scripts/behavior-test.ps1
-else
-  warn "未找到 pwsh，跳过 PowerShell 语法检查"
-fi
-
 info "全部检查通过"

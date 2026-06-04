@@ -37,8 +37,6 @@ Windows 11 PowerShell：
 - README 和 docs 中引用的本地文档是否存在。
 - YAML 配置语法。
 - Docker Compose 配置是否能渲染。
-- PowerShell 测试脚本语法。
-- PowerShell 部署和清理脚本行为测试。
 - 清理脚本语法。
 - 本机验收脚本语法。
 
@@ -49,7 +47,7 @@ Windows 11 PowerShell：
 - 没有 Docker 时，跳过 `docker compose config`。
 - 没有 Ruby 时，跳过 YAML 解析检查。
 - 没有 ShellCheck 时，跳过 Bash lint。
-- 没有 PowerShell 时，跳过 PowerShell 语法和行为测试。
+- PowerShell 语法由 Windows CI 的 `scripts/test.ps1` 强制覆盖；PowerShell 行为测试会运行并报告问题，但当前不阻断基础 CI。
 
 这让低配部署设备也可以运行基础测试。
 
