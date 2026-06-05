@@ -57,6 +57,7 @@ usage() {
   easygate native deploy --domain <domain> [选项]
   easygate cleanup [--purge]
   easygate native cleanup [--purge]
+  easygate uninstall
   easygate ps|logs|config|up|down|demo [cleanup]
   easygate home
 
@@ -977,6 +978,29 @@ case "$cmd" in
     ;;
   home) printf '%s\n' "$EASYGATE_HOME" ;;
   version|--version) printf 'easygate %s\n' "$VERSION" ;;
+  uninstall)
+    cleanup_compose "$@"
+    cleanup_native "$@"
+    for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"; do
+      [[ -f "$rc" ]] || continue
+      if grep -qs "${EASYGATE_HOME}/bin" "$rc" 2>/dev/null; then
+        if [[ "$(uname -s)" == "Darwin" ]]; then
+          sed -i '' '/^# EasyGate CLI$/,/^export PATH=.*easygate.*bin.*$/d' "$rc" 2>/dev/null || true
+          sed -i '' '/export PATH=.*easygate.*bin.*PATH/d' "$rc" 2>/dev/null || true
+        else
+          sed -i '/^# EasyGate CLI$/,/^export PATH=.*easygate.*bin.*$/d' "$rc" 2>/dev/null || true
+          sed -i '/export PATH=.*easygate.*bin.*PATH/d' "$rc" 2>/dev/null || true
+        fi
+        info "已从 ${rc} 移除 EasyGate PATH 配置"
+      fi
+    done
+    TARGET="${EASYGATE_HOME}/bin/easygate"
+    if [[ -f "$TARGET" ]]; then
+      rm -f "$TARGET"
+      info "已删除 CLI：${TARGET}"
+    fi
+    info "卸载完成"
+    ;;
   native)
     subcmd="${1:-}"
     if [[ $# -gt 0 ]]; then shift; fi
