@@ -1,5 +1,5 @@
 param(
-  [Parameter(Position=0, ValueFromRemainingArguments = $true)]
+  [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$CommandArgs,
   [string]$Domain,
   [string]$Tunnel,
