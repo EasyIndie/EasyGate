@@ -1,21 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-default_easygate_home() {
-  if [[ -n "${EASYGATE_HOME:-}" ]]; then
-    printf '%s' "$EASYGATE_HOME"
-    return
-  fi
-
-  case "$(uname -s)" in
-    Darwin) printf '%s' "${HOME}/Library/Application Support/EasyGate" ;;
-    *) printf '%s' "${XDG_DATA_HOME:-${HOME}/.local/share}/easygate" ;;
-  esac
-}
-
-EASYGATE_HOME="$(default_easygate_home)"
-COMPOSE_FILE="${EASYGATE_HOME}/compose/docker-compose.yml"
-COMPOSE_ENV="${EASYGATE_HOME}/compose/.env"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+EASYGATE_LIB_TAG="compose"
+source "${ROOT_DIR}/scripts/lib.sh"
 
 if [[ ! -f "$COMPOSE_FILE" || ! -f "$COMPOSE_ENV" ]]; then
   printf '[compose] 未找到运行时 Compose 配置，请先执行 ./scripts/deploy.sh\n' >&2

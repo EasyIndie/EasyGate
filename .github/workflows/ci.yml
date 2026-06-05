@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  schedule:
+    # Run weekly on Monday at 09:37 Asia/Shanghai to catch regressions from
+    # dependency updates or external API changes.
+    - cron: "37 1 * * 1"
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -12,6 +16,7 @@ jobs:
   unix:
     name: ${{ matrix.os }} / bash
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -51,9 +56,19 @@ jobs:
           EASYGATE_CLI: ${{ runner.temp }}/easygate-standalone/bin/easygate
         run: ./scripts/local-acceptance-native.sh
 
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: logs-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/easygate-standalone/logs/
+          if-no-files-found: ignore
+
   windows:
     name: windows-latest / powershell
     runs-on: windows-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout

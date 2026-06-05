@@ -2,34 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-default_easygate_home() {
-  if [[ -n "${EASYGATE_HOME:-}" ]]; then
-    printf '%s' "$EASYGATE_HOME"
-    return
-  fi
+EASYGATE_LIB_TAG="cleanup"
+source "${ROOT_DIR}/scripts/lib.sh"
 
-  case "$(uname -s)" in
-    Darwin) printf '%s' "${HOME}/Library/Application Support/EasyGate" ;;
-    *) printf '%s' "${XDG_DATA_HOME:-${HOME}/.local/share}/easygate" ;;
-  esac
-}
-
-EASYGATE_HOME="$(default_easygate_home)"
-COMPOSE_FILE="${EASYGATE_HOME}/compose/docker-compose.yml"
-COMPOSE_ENV="${EASYGATE_HOME}/compose/.env"
 PURGE=false
-
-info() {
-  printf '\033[1;34m[cleanup]\033[0m %s\n' "$1"
-}
-
-warn() {
-  printf '\033[1;33m[cleanup]\033[0m %s\n' "$1"
-}
-
-error() {
-  printf '\033[1;31m[cleanup]\033[0m %s\n' "$1" >&2
-}
 
 usage() {
   cat <<'EOF_USAGE'

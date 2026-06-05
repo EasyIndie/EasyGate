@@ -1,7 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="${EASYGATE_VERSION:-dev}"
+# NOTE: This standalone CLI duplicates some functions from scripts/lib.sh
+# by design — it must remain self-contained because it is installed as a
+# single file to EASYGATE_HOME/bin/.  When modifying shared utilities,
+# please also update scripts/lib.sh (the canonical source).
+
+# Resolve version from git tag, environment, or fall back to "dev".
+if [[ -z "${EASYGATE_VERSION:-}" ]]; then
+  if command -v git >/dev/null 2>&1 && git -C "${0%/*}/.." rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    VERSION="$(git -C "${0%/*}/.." describe --tags --always --dirty 2>/dev/null || echo "dev")"
+  else
+    VERSION="dev"
+  fi
+else
+  VERSION="$EASYGATE_VERSION"
+fi
 
 default_easygate_home() {
   if [[ -n "${EASYGATE_HOME:-}" ]]; then
@@ -66,6 +80,46 @@ require_command() {
   fi
 }
 
+validate_port() {
+  local port="$1"
+  local label="${2:-port}"
+  if [[ ! "$port" =~ ^[0-9]+$ ]]; then
+    error "${label} 必须是数字：${port}"
+    return 1
+  fi
+  if (( port < 1 || port > 65535 )); then
+    error "${label} 超出范围 (1-65535)：${port}"
+    return 1
+  fi
+  return 0
+}
+
+validate_domain() {
+  local domain="$1"
+  if [[ "$domain" == "example.com" ]]; then
+    error "请使用真实域名，不要使用 example.com"
+    return 1
+  fi
+  if [[ ! "$domain" =~ \. ]]; then
+    error "域名格式不正确：${domain}（缺少顶级域）"
+    return 1
+  fi
+  if [[ "$domain" =~ [[:space:]] ]]; then
+    error "域名不能包含空格：${domain}"
+    return 1
+  fi
+  return 0
+}
+
+validate_tunnel_name() {
+  local name="$1"
+  if [[ ! "$name" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$ ]]; then
+    error "Tunnel 名称格式不正确（仅支持字母、数字和连字符）：${name}"
+    return 1
+  fi
+  return 0
+}
+
 prompt_default() {
   local prompt="$1"
   local default="$2"
@@ -126,7 +180,7 @@ install_cloudflared() {
       url="https://github.com/cloudflare/cloudflared/releases/latest/download/${asset}"
       downloaded="${tmp_dir}/${asset}"
       info "下载 cloudflared：${asset}"
-      curl -fL --retry 3 --retry-delay 2 -o "$downloaded" "$url"
+      curl -fL --retry 3 --retry-delay 2 --connect-timeout 30 -o "$downloaded" "$url"
       rm -rf "${tmp_dir}/extract"
       mkdir -p "${tmp_dir}/extract"
       tar -xzf "$downloaded" -C "${tmp_dir}/extract"
@@ -138,7 +192,7 @@ install_cloudflared() {
       asset="cloudflared-linux-${arch}"
       url="https://github.com/cloudflare/cloudflared/releases/latest/download/${asset}"
       info "下载 cloudflared：${asset}"
-      curl -fL --retry 3 --retry-delay 2 -o "${install_dir}/cloudflared" "$url"
+      curl -fL --retry 3 --retry-delay 2 --connect-timeout 30 -o "${install_dir}/cloudflared" "$url"
       ;;
     *) error "仅支持 macOS/Linux 自动安装 cloudflared"; exit 1 ;;
   esac
@@ -189,9 +243,33 @@ install_traefik() {
   mkdir -p "$install_dir" "$tmp_dir"
   asset="traefik_v${traefik_version}_${os}_${arch}.tar.gz"
   url="https://github.com/traefik/traefik/releases/download/v${traefik_version}/${asset}"
+  checksums_url="https://github.com/traefik/traefik/releases/download/v${traefik_version}/traefik_v${traefik_version}_checksums.txt"
   downloaded="${tmp_dir}/${asset}"
+  checksums_file="${tmp_dir}/traefik_checksums.txt"
+
   info "下载 Traefik：${asset}"
-  curl -fL --retry 3 --retry-delay 2 -o "$downloaded" "$url"
+  curl -fL --retry 3 --retry-delay 2 --connect-timeout 30 -o "$downloaded" "$url"
+
+  # Verify SHA256 checksum.
+  info "验证 Traefik SHA256 校验和"
+  if curl -fL --retry 3 --retry-delay 2 --connect-timeout 30 -o "$checksums_file" "$checksums_url"; then
+    local expected actual
+    expected="$(grep "${asset}" "$checksums_file" | awk '{print $1}' || true)"
+    actual="$(shasum -a 256 "$downloaded" 2>/dev/null | awk '{print $1}' || true)"
+    if [[ -z "$expected" ]]; then
+      warn "无法从 checksums 文件中找到 ${asset} 的校验和，跳过验证"
+    elif [[ "$expected" != "$actual" ]]; then
+      error "Traefik SHA256 校验和不匹配"
+      error "期望：${expected}"
+      error "实际：${actual}"
+      exit 1
+    else
+      info "SHA256 校验通过"
+    fi
+  else
+    warn "无法下载 Traefik checksums 文件，跳过校验和验证"
+  fi
+
   rm -rf "${tmp_dir}/extract"
   mkdir -p "${tmp_dir}/extract"
   tar -xzf "$downloaded" -C "${tmp_dir}/extract"
@@ -274,6 +352,7 @@ write_compose_file() {
   local base_domain="$1"
   local dashboard_host="$2"
   local traefik_http_port="$3"
+  local cloudflared_image="${EASYGATE_CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2025.2.1}"
 
   cat > "$COMPOSE_FILE" <<EOF_COMPOSE
 services:
@@ -299,9 +378,20 @@ services:
       - traefik.http.routers.traefik-dashboard.rule=Host(\`${dashboard_host}\`)
       - traefik.http.routers.traefik-dashboard.entrypoints=web
       - traefik.http.routers.traefik-dashboard.service=api@internal
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 32M
 
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: ${cloudflared_image}
     container_name: easygate-cloudflared
     restart: unless-stopped
     command: tunnel --config /etc/cloudflared/config.yml run
@@ -311,6 +401,15 @@ services:
       - "${EASYGATE_HOME}/cloudflared:/etc/cloudflared:ro"
     depends_on:
       - traefik
+    read_only: true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+        reservations:
+          memory: 16M
 
   demo-api:
     image: traefik/whoami:v1.10
@@ -324,6 +423,15 @@ services:
       - traefik.http.routers.demo-api.rule=Host(\`api.${base_domain}\`)
       - traefik.http.routers.demo-api.entrypoints=web
       - traefik.http.services.demo-api.loadbalancer.server.port=80
+    read_only: true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+        reservations:
+          memory: 8M
 
   demo-test-api:
     image: traefik/whoami:v1.10
@@ -337,6 +445,15 @@ services:
       - traefik.http.routers.demo-test-api.rule=Host(\`test-api.${base_domain}\`)
       - traefik.http.routers.demo-test-api.entrypoints=web
       - traefik.http.services.demo-test-api.loadbalancer.server.port=80
+    read_only: true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+        reservations:
+          memory: 8M
 
 networks:
   easygate-proxy:
@@ -422,7 +539,9 @@ deploy_compose() {
   if [[ -z "$base_domain" ]]; then
     base_domain="$(prompt_default "请输入主域名" "example.com")"
   fi
-  [[ "$base_domain" != "example.com" ]] || { error "请使用真实域名，不要使用 example.com"; exit 1; }
+  validate_domain "$base_domain" || exit 1
+  validate_tunnel_name "$tunnel_name" || exit 1
+  validate_port "$traefik_http_port" "TRAEFIK_HTTP_PORT" || exit 1
 
   if [[ -z "$dashboard_host" ]]; then
     dashboard_host="traefik.${base_domain}"
@@ -496,9 +615,25 @@ find_python() {
   return 1
 }
 
+# ── PID file advisory lock (mkdir-based, portable) ───────────────────
+
+pid_lock_acquire() {
+  local name="$1"
+  local lock_dir="${EASYGATE_HOME}/run/.${name}.lock"
+  mkdir "$lock_dir" 2>/dev/null
+}
+
+pid_lock_release() {
+  local name="$1"
+  local lock_dir="${EASYGATE_HOME}/run/.${name}.lock"
+  rmdir "$lock_dir" 2>/dev/null || true
+}
+
 stop_pid_file() {
   local file="$1"
-  [[ -f "$file" ]] || return
+  if [[ ! -f "$file" ]]; then
+    return 0
+  fi
   local pid
   pid="$(cat "$file" 2>/dev/null || true)"
   if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
@@ -516,10 +651,19 @@ start_process() {
   shift
   local pid_file="${EASYGATE_HOME}/run/${name}.pid"
   local log_file="${EASYGATE_HOME}/logs/${name}.log"
+
+  # Acquire advisory lock to prevent concurrent PID file corruption.
+  if ! pid_lock_acquire "$name"; then
+    error "无法获取 ${name} 的 PID 锁，可能有另一个 easygate 实例正在运行"
+    return 1
+  fi
+
   stop_pid_file "$pid_file"
   info "启动 ${name}"
   nohup "$@" >"$log_file" 2>&1 &
   printf '%s\n' "$!" > "$pid_file"
+
+  pid_lock_release "$name"
 }
 
 write_native_demo_server() {
@@ -565,6 +709,16 @@ deploy_native() {
   local base_domain="" tunnel_name="easygate-home" dashboard_host="" traefik_http_port="18080"
   local native_api_port="${EASYGATE_NATIVE_API_PORT:-19080}" native_test_api_port="${EASYGATE_NATIVE_TEST_API_PORT:-19081}"
   local route_dns=true start_demo=false local_only=false install_cloudflared=true install_traefik=true
+  local _started_pids=()
+
+  # Clean up any started processes if the deployment is interrupted.
+  _native_interrupt_cleanup() {
+    local f
+    for f in "${_started_pids[@]}"; do
+      stop_pid_file "$f"
+    done
+  }
+  trap '_native_interrupt_cleanup' INT TERM
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -594,10 +748,13 @@ deploy_native() {
   if [[ -z "$base_domain" ]]; then
     base_domain="$(prompt_default "请输入主域名" "example.com")"
   fi
-  if [[ "$base_domain" == "example.com" && "$local_only" != true ]]; then
-    error "请使用真实域名，不要使用 example.com"
-    exit 1
+  if [[ "$local_only" != true ]]; then
+    validate_domain "$base_domain" || exit 1
   fi
+  validate_tunnel_name "$tunnel_name" || exit 1
+  validate_port "$traefik_http_port" "TRAEFIK_HTTP_PORT" || exit 1
+  validate_port "$native_api_port" "NATIVE_API_PORT" || exit 1
+  validate_port "$native_test_api_port" "NATIVE_TEST_API_PORT" || exit 1
   if [[ -z "$dashboard_host" ]]; then
     dashboard_host="traefik.${base_domain}"
   fi
@@ -708,13 +865,20 @@ EOF_CLOUDFLARED
     python_bin="$(find_python)" || { error "原生 demo 需要 python3 或 python"; exit 1; }
     write_native_demo_server
     start_process "native-demo-api" "$python_bin" "${EASYGATE_HOME}/lib/native-demo-server.py" --port "$native_api_port"
+    _started_pids+=("${EASYGATE_HOME}/run/native-demo-api.pid")
     start_process "native-demo-test-api" "$python_bin" "${EASYGATE_HOME}/lib/native-demo-server.py" --port "$native_test_api_port"
+    _started_pids+=("${EASYGATE_HOME}/run/native-demo-test-api.pid")
   fi
 
   start_process "native-traefik" "$(command -v traefik)" --configFile="${EASYGATE_HOME}/native/traefik.yml"
+  _started_pids+=("${EASYGATE_HOME}/run/native-traefik.pid")
   if [[ "$local_only" != true ]]; then
     start_process "native-cloudflared" "$(command -v cloudflared)" tunnel --config "${EASYGATE_HOME}/cloudflared/config.native.yml" run
+    _started_pids+=("${EASYGATE_HOME}/run/native-cloudflared.pid")
   fi
+
+  # Deployment completed successfully — disarm interrupt trap.
+  trap - INT TERM
 
   info "原生部署完成"
   printf '\n后续检查：\n'

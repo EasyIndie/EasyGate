@@ -2,32 +2,14 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-default_easygate_home() {
-  if [[ -n "${EASYGATE_HOME:-}" ]]; then
-    printf '%s' "$EASYGATE_HOME"
-    return
-  fi
+EASYGATE_LIB_TAG="acceptance-native"
+source "${ROOT_DIR}/scripts/lib.sh"
 
-  case "$(uname -s)" in
-    Darwin) printf '%s' "${HOME}/Library/Application Support/EasyGate" ;;
-    *) printf '%s' "${XDG_DATA_HOME:-${HOME}/.local/share}/easygate" ;;
-  esac
-}
-
-EASYGATE_HOME="$(default_easygate_home)"
 EASYGATE_CLI="${EASYGATE_CLI:-${ROOT_DIR}/scripts/easygate}"
 STRICT="${EASYGATE_ACCEPTANCE_STRICT:-false}"
 TRAEFIK_HTTP_PORT="${TRAEFIK_HTTP_PORT:-18080}"
 ENV_BACKUP="$(mktemp "${TMPDIR:-/tmp}/easygate-native-env.XXXXXX")"
 HAD_ENV=false
-
-info() {
-  printf '\033[1;34m[acceptance-native]\033[0m %s\n' "$1"
-}
-
-warn() {
-  printf '\033[1;33m[acceptance-native]\033[0m %s\n' "$1"
-}
 
 fail() {
   printf '\033[1;31m[acceptance-native]\033[0m %s\n' "$1" >&2

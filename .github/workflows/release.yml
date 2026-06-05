@@ -17,6 +17,8 @@ env:
 
 permissions:
   contents: write
+  id-token: write   # Needed for cosign keyless signing
+  actions: read     # Needed for SLSA provenance
 
 jobs:
   release:
@@ -38,8 +40,29 @@ jobs:
           cd dist
           shasum -a 256 easygate easygate.ps1 install.sh install.ps1 > SHA256SUMS
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign SHA256SUMS with cosign (keyless)
+        run: |
+          cosign sign-blob \
+            --yes \
+            --output-signature dist/SHA256SUMS.sig \
+            --output-certificate dist/SHA256SUMS.pem \
+            dist/SHA256SUMS
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v1
+        with:
+          path: ./dist/
+          format: spdx-json
+          output-file: dist/sbom.spdx.json
+
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$TAG_NAME" dist/* --title "$TAG_NAME" --generate-notes
+          gh release create "$TAG_NAME" dist/* \
+            --title "$TAG_NAME" \
+            --generate-notes \
+            --verify-tag
