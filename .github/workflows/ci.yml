@@ -46,7 +46,16 @@ jobs:
 
       - name: Run PowerShell tests
         shell: pwsh
-        run: .\scripts\test.ps1
+        run: |
+          $Output = & pwsh -NoLogo -NoProfile -File .\scripts\test.ps1 *>&1
+          $ExitCode = $LASTEXITCODE
+          $Output | ForEach-Object { Write-Host $_ }
+          if ($ExitCode -ne 0) {
+            $Tail = ($Output | Select-Object -Last 80 | Out-String).Trim()
+            $Tail = $Tail.Replace("%", "%25").Replace("`r", "%0D").Replace("`n", "%0A")
+            Write-Host "::error file=.github/workflows/ci.yml,line=49,title=PowerShell tests failed::$Tail"
+            exit $ExitCode
+          }
 
       - name: Run local acceptance
         shell: pwsh
