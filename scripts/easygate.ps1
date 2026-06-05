@@ -1,5 +1,6 @@
-[CmdletBinding(PositionalBinding=$false)]
 param(
+  [Parameter(ValueFromRemainingArguments = $true)]
+  [string[]]$CommandArgs,
   [string]$Domain,
   [string]$Tunnel,
   [string]$Dashboard,
@@ -13,11 +14,6 @@ param(
   [switch]$NoInstallTraefik,
   [switch]$Purge
 )
-
-# PositionalBinding=$false prevents positional args like "deploy" from
-# binding to the first [string] param.  Undeclared arguments land in
-# $args and become the sub-command name.
-$CommandArgs = @($args)
 
 $ErrorActionPreference = "Stop"
 $Version = if ([string]::IsNullOrWhiteSpace($env:EASYGATE_VERSION)) { "dev" } else { $env:EASYGATE_VERSION }
