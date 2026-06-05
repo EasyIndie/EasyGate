@@ -57,6 +57,14 @@ function New-MockBin {
   )
   New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
   "" | Set-Content -Path $LogFile
+  $DockerScript = Join-Path $BinDir "docker.ps1"
+  $CloudflaredScript = Join-Path $BinDir "cloudflared.ps1"
+  $TraefikScript = Join-Path $BinDir "traefik.ps1"
+  if ($IsWindows) {
+    $DockerScript = Join-Path $BinDir "docker.mock.ps1"
+    $CloudflaredScript = Join-Path $BinDir "cloudflared.mock.ps1"
+    $TraefikScript = Join-Path $BinDir "traefik.mock.ps1"
+  }
 
   @'
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$CommandArgs)
@@ -68,7 +76,7 @@ if ($CommandArgs.Count -ge 5 -and $CommandArgs[0] -eq "compose" -and $CommandArg
   }
 }
 exit 0
-'@ | Set-Content -Path (Join-Path $BinDir "docker.ps1") -Encoding UTF8
+'@ | Set-Content -Path $DockerScript -Encoding UTF8
 
   @'
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$CommandArgs)
@@ -77,34 +85,34 @@ if ($CommandArgs.Count -ge 2 -and $CommandArgs[0] -eq "tunnel" -and $CommandArgs
   exit 1
 }
 exit 0
-'@ | Set-Content -Path (Join-Path $BinDir "cloudflared.ps1") -Encoding UTF8
+'@ | Set-Content -Path $CloudflaredScript -Encoding UTF8
 
   @'
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$CommandArgs)
 Add-Content -Path $env:EASYGATE_MOCK_LOG -Value ("traefik " + ($CommandArgs -join " "))
 exit 0
-'@ | Set-Content -Path (Join-Path $BinDir "traefik.ps1") -Encoding UTF8
+'@ | Set-Content -Path $TraefikScript -Encoding UTF8
 
   if ($IsWindows) {
-    "@pwsh -NoProfile -ExecutionPolicy Bypass -File ""$BinDir\docker.ps1"" %*" |
+    "@pwsh -NoProfile -ExecutionPolicy Bypass -File ""$DockerScript"" %*" |
       Set-Content -Path (Join-Path $BinDir "docker.cmd") -Encoding ASCII
-    "@pwsh -NoProfile -ExecutionPolicy Bypass -File ""$BinDir\cloudflared.ps1"" %*" |
+    "@pwsh -NoProfile -ExecutionPolicy Bypass -File ""$CloudflaredScript"" %*" |
       Set-Content -Path (Join-Path $BinDir "cloudflared.cmd") -Encoding ASCII
-    "@pwsh -NoProfile -ExecutionPolicy Bypass -File ""$BinDir\traefik.ps1"" %*" |
+    "@pwsh -NoProfile -ExecutionPolicy Bypass -File ""$TraefikScript"" %*" |
       Set-Content -Path (Join-Path $BinDir "traefik.cmd") -Encoding ASCII
   }
   else {
     @"
 #!/usr/bin/env sh
-pwsh -NoProfile -File "$BinDir/docker.ps1" "`$@"
+pwsh -NoProfile -File "$DockerScript" "`$@"
 "@ | Set-Content -Path (Join-Path $BinDir "docker") -Encoding UTF8
     @"
 #!/usr/bin/env sh
-pwsh -NoProfile -File "$BinDir/cloudflared.ps1" "`$@"
+pwsh -NoProfile -File "$CloudflaredScript" "`$@"
 "@ | Set-Content -Path (Join-Path $BinDir "cloudflared") -Encoding UTF8
     @"
 #!/usr/bin/env sh
-pwsh -NoProfile -File "$BinDir/traefik.ps1" "`$@"
+pwsh -NoProfile -File "$TraefikScript" "`$@"
 "@ | Set-Content -Path (Join-Path $BinDir "traefik") -Encoding UTF8
     chmod +x "$(Join-Path $BinDir "docker")" "$(Join-Path $BinDir "cloudflared")" "$(Join-Path $BinDir "traefik")"
   }
