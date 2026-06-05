@@ -1,6 +1,4 @@
 param(
-  [Parameter(ValueFromRemainingArguments = $true)]
-  [string[]]$CommandArgs,
   [string]$Domain,
   [string]$Tunnel,
   [string]$Dashboard,
@@ -14,6 +12,11 @@ param(
   [switch]$NoInstallTraefik,
   [switch]$Purge
 )
+
+# Use $args for undeclared positional arguments (e.g. "deploy", "cleanup").
+# Avoids ValueFromRemainingArguments which triggers PowerShell common
+# parameter binding issues on PS 7 (e.g. -d consumed as -Debug).
+$CommandArgs = @($args)
 
 $ErrorActionPreference = "Stop"
 $Version = if ([string]::IsNullOrWhiteSpace($env:EASYGATE_VERSION)) { "dev" } else { $env:EASYGATE_VERSION }
@@ -375,11 +378,12 @@ function Write-RuntimeComposeFile {
 }
 
 function Invoke-EasyGateCompose {
-  param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
+  # Use $args directly to avoid PowerShell consuming flags like -d as
+  # common parameters (e.g. -Debug).
   if (-not (Test-Path $ComposeFile) -or -not (Test-Path $ComposeEnv)) {
     Fail "未找到运行时 Compose 配置，请先执行 easygate.ps1 deploy。期望文件：$ComposeFile"
   }
-  & docker compose -p easygate -f $ComposeFile --env-file $ComposeEnv @Args
+  & docker compose -p easygate -f $ComposeFile --env-file $ComposeEnv @args
 }
 
 function Test-NativeProcessActive {
