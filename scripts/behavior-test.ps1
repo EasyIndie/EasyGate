@@ -66,33 +66,33 @@ function New-MockBin {
     $TraefikScript = Join-Path $BinDir "traefik.mock.ps1"
   }
 
-  @'
-param([Parameter(ValueFromRemainingArguments = $true)][string[]]$CommandArgs)
-Add-Content -Path $env:EASYGATE_MOCK_LOG -Value ("docker " + ($CommandArgs -join " "))
-$CommandText = $CommandArgs -join " "
-if ($CommandText.Contains(" ps --services --status running")) {
-  if ($env:EASYGATE_MOCK_COMPOSE_RUNNING -eq "true") {
+  @"
+`$CommandArgs = `$args
+Add-Content -Path "$LogFile" -Value ("docker " + (`$CommandArgs -join " "))
+`$CommandText = `$CommandArgs -join " "
+if (`$CommandText.Contains(" ps --services --status running")) {
+  if (`$env:EASYGATE_MOCK_COMPOSE_RUNNING -eq "true") {
     Write-Output "traefik"
     Write-Output "cloudflared"
   }
 }
 exit 0
-'@ | Set-Content -Path $DockerScript -Encoding UTF8
+"@ | Set-Content -Path $DockerScript -Encoding UTF8
 
-  @'
-param([Parameter(ValueFromRemainingArguments = $true)][string[]]$CommandArgs)
-Add-Content -Path $env:EASYGATE_MOCK_LOG -Value ("cloudflared " + ($CommandArgs -join " "))
-if ($CommandArgs.Count -ge 2 -and $CommandArgs[0] -eq "tunnel" -and $CommandArgs[1] -eq "create") {
+  @"
+`$CommandArgs = `$args
+Add-Content -Path "$LogFile" -Value ("cloudflared " + (`$CommandArgs -join " "))
+if (`$CommandArgs.Count -ge 2 -and `$CommandArgs[0] -eq "tunnel" -and `$CommandArgs[1] -eq "create") {
   exit 1
 }
 exit 0
-'@ | Set-Content -Path $CloudflaredScript -Encoding UTF8
+"@ | Set-Content -Path $CloudflaredScript -Encoding UTF8
 
-  @'
-param([Parameter(ValueFromRemainingArguments = $true)][string[]]$CommandArgs)
-Add-Content -Path $env:EASYGATE_MOCK_LOG -Value ("traefik " + ($CommandArgs -join " "))
+  @"
+`$CommandArgs = `$args
+Add-Content -Path "$LogFile" -Value ("traefik " + (`$CommandArgs -join " "))
 exit 0
-'@ | Set-Content -Path $TraefikScript -Encoding UTF8
+"@ | Set-Content -Path $TraefikScript -Encoding UTF8
 
   if ($IsWindows) {
     "@pwsh -NoProfile -ExecutionPolicy Bypass -File ""$DockerScript"" %*" |
