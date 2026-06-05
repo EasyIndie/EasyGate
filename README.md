@@ -36,11 +36,10 @@ easygate cleanup     # 停止服务，保留配置
 
 ## 平台支持
 
-| 平台 | Bash CLI | PowerShell CLI |
-|------|----------|----------------|
-| macOS | ✅ | ✅ |
-| Linux | ✅ | ✅ |
-| Windows | — | ✅ |
+| 平台 | 推荐 CLI |
+|------|----------|
+| macOS / Linux | `easygate`（Bash） |
+| Windows | `easygate.ps1`（PowerShell） |
 
 ## 更多文档
 
