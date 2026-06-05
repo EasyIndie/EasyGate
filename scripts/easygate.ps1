@@ -1,6 +1,4 @@
 param(
-  [Parameter(ValueFromRemainingArguments = $true)]
-  [string[]]$CommandArgs,
   [string]$Domain,
   [string]$Tunnel,
   [string]$Dashboard,
@@ -12,7 +10,9 @@ param(
   [switch]$LocalOnly,
   [switch]$NoInstallCloudflared,
   [switch]$NoInstallTraefik,
-  [switch]$Purge
+  [switch]$Purge,
+  [Parameter(ValueFromRemainingArguments = $true)]
+  [string[]]$CommandArgs
 )
 
 $ErrorActionPreference = "Stop"
