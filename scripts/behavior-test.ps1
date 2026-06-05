@@ -70,6 +70,7 @@ function New-MockBin {
   }
 
   @"
+Write-Host "[docker.mock] invoked: `$(`$args -join ' ')"
 `$ErrorActionPreference = "Stop"
 `$CommandArgs = `$args
 try {
@@ -89,6 +90,7 @@ exit 0
 "@ | Set-Content -Path $DockerScript -Encoding UTF8
 
   @"
+Write-Host "[cloudflared.mock] invoked: `$(`$args -join ' ')"
 `$ErrorActionPreference = "Stop"
 `$CommandArgs = `$args
 try {
@@ -104,6 +106,7 @@ exit 0
 "@ | Set-Content -Path $CloudflaredScript -Encoding UTF8
 
   @"
+Write-Host "[traefik.mock] invoked: `$(`$args -join ' ')"
 `$ErrorActionPreference = "Stop"
 `$CommandArgs = `$args
 try {
@@ -116,12 +119,15 @@ exit 0
 "@ | Set-Content -Path $TraefikScript -Encoding UTF8
 
   if ($IsWindows) {
-    "@pwsh -NoProfile -ExecutionPolicy Bypass -File ""$DockerScript"" %*" |
-      Set-Content -Path (Join-Path $BinDir "docker.cmd") -Encoding ASCII
-    "@pwsh -NoProfile -ExecutionPolicy Bypass -File ""$CloudflaredScript"" %*" |
-      Set-Content -Path (Join-Path $BinDir "cloudflared.cmd") -Encoding ASCII
-    "@pwsh -NoProfile -ExecutionPolicy Bypass -File ""$TraefikScript"" %*" |
-      Set-Content -Path (Join-Path $BinDir "traefik.cmd") -Encoding ASCII
+    # Use .bat wrappers that call pwsh -File.  Both .bat and .cmd are
+    # matched by PATHEXT; we use .bat so the file is found even if a
+    # real docker.exe exists on the runner.
+    "@pwsh -NoProfile -ExecutionPolicy Bypass -File `"$DockerScript`" %*" |
+      Set-Content -Path (Join-Path $BinDir "docker.bat") -Encoding ASCII
+    "@pwsh -NoProfile -ExecutionPolicy Bypass -File `"$CloudflaredScript`" %*" |
+      Set-Content -Path (Join-Path $BinDir "cloudflared.bat") -Encoding ASCII
+    "@pwsh -NoProfile -ExecutionPolicy Bypass -File `"$TraefikScript`" %*" |
+      Set-Content -Path (Join-Path $BinDir "traefik.bat") -Encoding ASCII
   }
   else {
     @"
