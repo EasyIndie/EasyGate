@@ -345,6 +345,63 @@ run_install_behavior_test() {
 
   assert_file "${runtime}/bin/easygate"
   EASYGATE_HOME="$runtime" "${runtime}/bin/easygate" version | grep -q "easygate" || fail "安装后的 easygate 无法运行"
+
+  # 验证写入的 PATH 行格式 —— 路径用引号包裹，$PATH 可展开
+  # 在测试环境中不检查真实 rc 文件（HOME 可能被 mock），
+  # 而是直接验证 install.sh 中 add_to_path 函数生成的行格式
+  local add_to_path_body
+  add_to_path_body="$(sed -n '/^add_to_path()/,/^}/p' "${ROOT_DIR}/scripts/install.sh")"
+  if echo "$add_to_path_body" | grep -q 'export PATH='; then
+    local export_line
+    export_line="$(echo "$add_to_path_body" | grep 'export PATH=' | head -1)"
+    # 必须包含单引号或双引号保护路径，且 $PATH 可展开
+    if ! echo "$export_line" | grep -qE "export PATH=['\"].*['\"].*\\\$PATH"; then
+      fail "install.sh add_to_path 生成的 PATH 行格式异常：${export_line}"
+    fi
+  else
+    fail "install.sh 缺少 PATH 导出逻辑"
+  fi
+}
+
+run_install_pipe_behavior_test() {
+  local runtime="${TMP_DIR}/install-pipe-runtime"
+
+  info "验证 install.sh 通过管道模式（curl | bash）可正常安装"
+  # 通过 stdin 管道传递脚本，模拟 curl | bash 场景
+  # 此时 BASH_SOURCE 为空，脚本不能依赖 lib.sh 或文件系统上下文
+  EASYGATE_HOME="$runtime" EASYGATE_LOCAL_CLI="${ROOT_DIR}/scripts/easygate" \
+    bash < "${ROOT_DIR}/scripts/install.sh" >/dev/null
+
+  assert_file "${runtime}/bin/easygate"
+  EASYGATE_HOME="$runtime" "${runtime}/bin/easygate" version | grep -q "easygate" || fail "管道安装后的 easygate 无法运行"
+
+  # 验证管道模式下不会因缺失 lib.sh 或 BASH_SOURCE 而失败
+  # （测试本身通过了上面的断言就证明没问题）
+}
+
+run_cleanup_command_behavior_test() {
+  local fixture="${TMP_DIR}/cleanup-cmd-fixture"
+  local bin="${TMP_DIR}/cleanup-cmd-bin"
+  local log="${TMP_DIR}/cleanup-cmd-commands.log"
+  local runtime="${TMP_DIR}/cleanup-cmd-runtime"
+
+  info "验证 cleanup compose down 命令不含 --profile（防止只停 demo 服务）"
+  make_fixture "$fixture"
+  make_mock_bin "$bin" "$log"
+
+  mkdir -p "${runtime}/compose" "${runtime}/cloudflared"
+  printf 'compose\n' > "${runtime}/compose/docker-compose.yml"
+  printf 'env\n' > "${runtime}/compose/.env"
+  printf 'secret\n' > "${runtime}/cloudflared/easygate-home.json"
+
+  (
+    cd "$fixture"
+    EASYGATE_HOME="$runtime" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" bash scripts/cleanup.sh
+  )
+  if grep -Fq -- "--profile" "$log"; then
+    fail "cleanup.sh 的 compose down 不应包含 --profile（否则只停 demo）"
+  fi
+  assert_contains "$log" "down --remove-orphans"
 }
 
 trap 'rm -rf "$TMP_DIR"' EXIT
@@ -354,8 +411,10 @@ run_compose_deploy_blocks_native_test
 run_native_deploy_behavior_test
 run_native_deploy_blocks_compose_test
 run_cleanup_behavior_test
+run_cleanup_command_behavior_test
 run_native_cleanup_behavior_test
 run_standalone_cli_behavior_test
 run_install_behavior_test
+run_install_pipe_behavior_test
 
 info "行为测试通过"

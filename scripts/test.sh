@@ -127,6 +127,17 @@ grep -q "cloudflared-windows-" scripts/easygate.ps1 || fail "easygate.ps1 缺少
 # Also verify the standalone CLI has its own copies:
 grep -q "cloudflared-linux-" scripts/easygate || fail "easygate CLI 缺少 Linux cloudflared 下载逻辑"
 grep -q "cloudflared-darwin-" scripts/easygate || fail "easygate CLI 缺少 macOS cloudflared 下载逻辑"
+# 回归检查：cloudflared 镜像版本已固定（非 :latest）
+grep -q "cloudflared:2025.2.1" scripts/deploy.ps1 || fail "deploy.ps1 cloudflared 版本未固定"
+grep -q "cloudflared:2025.2.1" scripts/easygate.ps1 || fail "easygate.ps1 cloudflared 版本未固定"
+grep -q "cloudflared:2025.2.1" docker-compose.yml || fail "docker-compose.yml cloudflared 版本未固定"
+# 回归检查：install.sh 不自依赖 lib.sh（curl | bash 模式无文件系统上下文）
+if grep -q "source.*lib.sh" scripts/install.sh; then
+  fail "install.sh 不可依赖 lib.sh（curl | bash 管道模式无文件系统上下文）"
+fi
+if grep -q "BASH_SOURCE" scripts/install.sh; then
+  fail "install.sh 不可使用 BASH_SOURCE（curl | bash 管道模式此变量为空）"
+fi
 
 info "检查原生模式入口"
 grep -q -- "--local-only" scripts/deploy-native.sh || fail "deploy-native.sh 缺少 local-only 验收入口"
@@ -138,6 +149,17 @@ grep -q "EASYGATE_CLI" scripts/local-acceptance-native.ps1 || fail "local-accept
 grep -q "config.native.yml" scripts/deploy-native.ps1 || fail "deploy-native.ps1 缺少原生 cloudflared 配置"
 grep -q "assert_no_native_deployment" scripts/deploy.sh || fail "deploy.sh 缺少原生模式互斥检查"
 grep -q "assert_no_compose_deployment" scripts/deploy-native.sh || fail "deploy-native.sh 缺少 Compose 模式互斥检查"
+# 回归检查：安全加固 —— 生成的 compose 必须含 read_only 和 cap_drop
+grep -q "read_only:" scripts/deploy.sh || fail "deploy.sh write_runtime_compose_file 缺少 read_only"
+grep -q "cap_drop:" scripts/deploy.sh || fail "deploy.sh write_runtime_compose_file 缺少 cap_drop"
+grep -q "read_only:" scripts/deploy.ps1 || fail "deploy.ps1 Write-RuntimeComposeFile 缺少 read_only"
+grep -q "cap_drop:" scripts/deploy.ps1 || fail "deploy.ps1 Write-RuntimeComposeFile 缺少 cap_drop"
+# 回归检查：Cleanup-Compose 不使用 --profile（否则只停 demo）
+if grep -q "Cleanup-Compose" scripts/easygate.ps1; then
+  if grep -A10 "function Cleanup-Compose" scripts/easygate.ps1 | grep -q -- "--profile"; then
+    fail "easygate.ps1 Cleanup-Compose 不应包含 --profile"
+  fi
+fi
 
 info "检查 GitHub Actions Node 24 兼容配置"
 grep -q "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24" .github/workflows/ci.yml || fail "CI 缺少 Node 24 opt-in"

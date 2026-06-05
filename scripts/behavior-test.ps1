@@ -361,6 +361,15 @@ function Test-CleanupBehavior {
     }
   }
   Assert-Missing $RuntimeDir
+
+  # 回归检查：cleanup 的 compose down 命令不含 --profile
+  $CleanupLogContent = Get-Content -Raw $LogFile
+  if ($CleanupLogContent.Contains("--profile")) {
+    Fail "cleanup.ps1 的 compose down 不应包含 --profile（否则只停 demo）"
+  }
+  if (-not $CleanupLogContent.Contains("down --remove-orphans")) {
+    Fail "cleanup.ps1 未执行 docker compose down --remove-orphans"
+  }
 }
 
 function Test-NativeDeployBehavior {
