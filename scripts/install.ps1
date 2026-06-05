@@ -55,10 +55,32 @@ $CommandArgs = @($CommandArgs) + $ForwardedOptions
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
 if (-not [string]::IsNullOrWhiteSpace($env:EASYGATE_LOCAL_CLI)) {
-  Copy-Item $env:EASYGATE_LOCAL_CLI $Target -Force
+  $SourcePath = $env:EASYGATE_LOCAL_CLI
+  Write-Host "[install] 从本地复制 CLI：$SourcePath"
+  if (-not (Test-Path $SourcePath -PathType Leaf)) {
+    Write-Error "[install] 找不到本地 CLI：$SourcePath"
+    Write-Host "[install] 当前工作目录：$(Get-Location)"
+    Write-Host "[install] github.workspace：$env:GITHUB_WORKSPACE"
+    Write-Host "[install] runner.temp：$env:RUNNER_TEMP"
+    exit 1
+  }
+  try {
+    Copy-Item $SourcePath $Target -Force -ErrorAction Stop
+  }
+  catch {
+    Write-Error "[install] 复制 CLI 失败：$_"
+    exit 1
+  }
 }
 else {
-  Invoke-WebRequest -UseBasicParsing -Uri $SourceUrl -OutFile $Target
+  Write-Host "[install] 从远程下载 CLI：$SourceUrl"
+  try {
+    Invoke-WebRequest -UseBasicParsing -Uri $SourceUrl -OutFile $Target -ErrorAction Stop
+  }
+  catch {
+    Write-Error "[install] 下载 CLI 失败：$_"
+    exit 1
+  }
 }
 
 Write-Host "[install] easygate.ps1 已安装到：$Target"
