@@ -1,10 +1,13 @@
 COMPOSE=docker compose
 LOCAL_COMPOSE=docker compose -f docker-compose.local.yml --env-file .env --profile demo
 
-.PHONY: deploy uninstall test behavior-test local-acceptance local-up local-down local-logs up down cleanup purge demo config logs ps
+.PHONY: deploy deploy-native uninstall test behavior-test local-acceptance local-acceptance-native local-up local-down local-logs up down cleanup cleanup-native purge purge-native demo config logs ps
 
 deploy:
 	./scripts/deploy.sh
+
+deploy-native:
+	./scripts/deploy-native.sh
 
 uninstall:
 	./scripts/uninstall.sh
@@ -17,6 +20,9 @@ behavior-test:
 
 local-acceptance:
 	./scripts/local-acceptance.sh
+
+local-acceptance-native:
+	./scripts/local-acceptance-native.sh
 
 local-up:
 	$(LOCAL_COMPOSE) up -d
@@ -36,8 +42,14 @@ down:
 cleanup:
 	./scripts/cleanup.sh
 
+cleanup-native:
+	./scripts/cleanup-native.sh
+
 purge:
 	./scripts/cleanup.sh --purge
+
+purge-native:
+	./scripts/cleanup-native.sh --purge
 
 demo:
 	$(COMPOSE) --profile demo up -d

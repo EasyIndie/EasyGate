@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PATH="${ROOT_DIR}/.easygate/bin:$PATH"
 CLOUDFLARED_HOME="${EASYGATE_CLOUDFLARED_HOME:-${HOME}/.cloudflared}"
 BASE_DOMAIN="${BASE_DOMAIN:-}"
 TUNNEL_NAME="${TUNNEL_NAME:-easygate-home}"
@@ -134,6 +135,30 @@ find_latest_credentials() {
     | head -n 1
 }
 
+native_pid_active() {
+  local file="$1"
+  [[ -f "$file" ]] || return 1
+
+  local pid
+  pid="$(cat "$file" 2>/dev/null || true)"
+  [[ -n "$pid" ]] || return 1
+  kill -0 "$pid" >/dev/null 2>&1
+}
+
+assert_no_native_deployment() {
+  local file
+  for file in \
+    .easygate/run/native-cloudflared.pid \
+    .easygate/run/native-traefik.pid \
+    .easygate/run/native-demo-api.pid \
+    .easygate/run/native-demo-test-api.pid; do
+    if native_pid_active "$file"; then
+      error "检测到原生模式进程正在运行：${file}。请先执行 ./scripts/cleanup-native.sh，再部署 Docker Compose 模式。"
+      exit 1
+    fi
+  done
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --domain)
@@ -179,6 +204,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 cd "$ROOT_DIR"
+
+assert_no_native_deployment
 
 require_command docker || exit 1
 install_cloudflared

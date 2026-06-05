@@ -134,6 +134,9 @@ make purge             # 删除本地生成配置、本地 CLI 和 tunnel 凭据
 make test              # 静态检查
 make behavior-test     # 部署和清理脚本行为测试
 make local-acceptance  # 本机路由验收
+make deploy-native     # 原生模式部署，不依赖 Docker
+make local-acceptance-native  # 原生模式本机验收
+make cleanup-native    # 停止原生模式进程
 ```
 
 ## 接入 Docker 服务
@@ -240,6 +243,7 @@ make purge
 ## 文档
 
 - [一键部署与清理](docs/deploy-uninstall.md)
+- [原生部署模式](docs/native-deployment.md)
 - [Cloudflare 配置清单](docs/cloudflare-checklist.md)
 - [创建 Cloudflare Tunnel](docs/create-cloudflare-tunnel.md)
 - [本机测试验收](docs/local-acceptance.md)

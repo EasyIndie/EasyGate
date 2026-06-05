@@ -136,12 +136,14 @@ http:
 
 做法：
 
-- 安装 `cloudflared` 二进制，并注册为系统服务。
-- 安装 Traefik 二进制，并注册为系统服务。
+- 使用 `scripts/deploy-native.sh` 或 `scripts/deploy-native.ps1` 准备 `cloudflared` 和 Traefik 二进制。
+- 通过项目托管进程运行原生 Traefik 和 `cloudflared`。
 - 使用 Traefik file provider 管理本机服务。
 - 不启用 Docker provider。
 
 这种模式也能实现 HTTPS 入口和 localhost 服务转发，但不会有 Docker labels 自动发现能力。
+
+当前项目已经提供原生模式的部署、清理、本机验收和 CI 覆盖。长期自启可以在验收通过后自行接入 `systemd`、launchd、Windows Task Scheduler 或 Windows Service。具体命令见 [native-deployment.md](native-deployment.md)。
 
 ## 模式间切换与互斥
 
@@ -150,9 +152,15 @@ http:
 | 切换方向 | 需要清理的内容 |
 |---------|--------------|
 | 模式一 → 模式二 | `docker compose down` 停止容器，释放端口；后续原生 Traefik 需使用不同端口或先确认 80/18080 已空闲 |
-| 模式二 → 模式一 | `systemctl stop traefik cloudflared`，`systemctl disable` 禁用自启，释放端口后再 `docker compose up -d` |
+| 模式二 → 模式一 | `./scripts/cleanup-native.sh` 或 `.\scripts\cleanup-native.ps1` 停止原生进程，释放端口后再 `docker compose up -d` |
 
 两套模式可以共用同一组 cloudflared tunnel 凭据文件（`cloudflared/*.json`），但**不能同时运行**——同时运行会被 Cloudflare 视为同一个 tunnel 的多个 connector，形成非预期的负载均衡。
+
+脚本层面已经做了互斥保护：
+
+- Docker Compose 部署脚本发现原生模式 PID 仍在运行时，会拒绝继续部署。
+- 原生部署脚本发现 Compose 模式的 `traefik` 或 `cloudflared` 服务正在运行时，会拒绝继续部署。
+- 同一模式重复部署是允许的：Compose 模式会重新渲染配置并执行 `docker compose up -d`；原生模式会先停止自己管理的旧 PID，再重新启动进程。
 
 核心原则：**一套 tunnel 凭据 + 一台设备 + 一个运行中的 cloudflared 实例**。切换模式时，确保旧的 cloudflared/Traefik 进程已完全停止。
 

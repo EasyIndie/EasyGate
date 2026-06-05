@@ -12,6 +12,7 @@ $ErrorActionPreference = "Stop"
 
 $RootDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $RootDir
+$env:PATH = (Join-Path $RootDir ".easygate\bin") + [System.IO.Path]::PathSeparator + $env:PATH
 
 $CloudflaredHome = if (-not [string]::IsNullOrWhiteSpace($env:EASYGATE_CLOUDFLARED_HOME)) {
   $env:EASYGATE_CLOUDFLARED_HOME
@@ -101,6 +102,30 @@ function Find-LatestCredential {
     Select-Object -First 1
 }
 
+function Test-NativeDeploymentActive {
+  @(
+    ".easygate\run\native-cloudflared.pid"
+    ".easygate\run\native-traefik.pid"
+    ".easygate\run\native-demo-api.pid"
+    ".easygate\run\native-demo-test-api.pid"
+  ) | ForEach-Object {
+    if (-not (Test-Path $_)) {
+      return
+    }
+
+    $PidText = (Get-Content -Raw $_).Trim()
+    if ([string]::IsNullOrWhiteSpace($PidText)) {
+      return
+    }
+
+    $Process = Get-Process -Id ([int]$PidText) -ErrorAction SilentlyContinue
+    if ($Process) {
+      Fail "检测到原生模式进程正在运行：$_。请先执行 .\scripts\cleanup-native.ps1，再部署 Docker Compose 模式。"
+    }
+  }
+}
+
+Test-NativeDeploymentActive
 Require-Command "docker"
 Install-Cloudflared
 

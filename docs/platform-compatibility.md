@@ -14,9 +14,15 @@ EasyGate 的 Docker Compose 项目可以兼容：
 - Linux：Docker Engine + Docker Compose 插件 + 一键部署脚本
 - Windows 11：Docker Desktop + WSL2 后端 + PowerShell 一键部署脚本
 
+不能使用 Docker 时，三类平台都可以使用原生部署脚本：
+
+- macOS / Linux：`./scripts/deploy-native.sh --domain example.com`
+- Windows 11：`.\scripts\deploy-native.ps1 -Domain example.com`
+
 Tunnel 创建步骤见 `docs/create-cloudflare-tunnel.md`。
 
 EasyGate 不会自动安装 Docker 或 Docker Compose。部署脚本会在缺少 `cloudflared` CLI 时自动下载到 `.easygate/bin/`。
+原生部署脚本还会在缺少 Traefik CLI 时自动下载到 `.easygate/bin/`。
 
 ## macOS
 

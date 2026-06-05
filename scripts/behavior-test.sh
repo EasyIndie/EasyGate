@@ -54,6 +54,12 @@ printf 'docker %s\n' "$*" >> "${EASYGATE_MOCK_LOG}"
 if [[ "${1:-}" == "compose" ]]; then
   case "$*" in
     "compose version"*) exit 0 ;;
+    "compose ps --services --status running"*)
+      if [[ "${EASYGATE_MOCK_COMPOSE_RUNNING:-false}" == "true" ]]; then
+        printf 'traefik\ncloudflared\n'
+      fi
+      exit 0
+      ;;
     *" config"*) exit 0 ;;
     *" up "*|*" up -d"*|*" down "*|*" rm "*|*" stop "*) exit 0 ;;
   esac
@@ -77,7 +83,14 @@ fi
 exit 0
 EOF_CLOUDFLARED
 
-  chmod +x "${bin_dir}/docker" "${bin_dir}/cloudflared"
+  cat > "${bin_dir}/traefik" <<'EOF_TRAEFIK'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'traefik %s\n' "$*" >> "${EASYGATE_MOCK_LOG}"
+exit 0
+EOF_TRAEFIK
+
+  chmod +x "${bin_dir}/docker" "${bin_dir}/cloudflared" "${bin_dir}/traefik"
   : > "$log_file"
 }
 
@@ -102,6 +115,11 @@ run_deploy_behavior_test() {
     HOME="$home" EASYGATE_CLOUDFLARED_HOME="${home}/.cloudflared" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" \
       bash scripts/deploy.sh --domain example.test --skip-route --demo --no-install-cloudflared
   )
+  (
+    cd "$fixture"
+    HOME="$home" EASYGATE_CLOUDFLARED_HOME="${home}/.cloudflared" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" \
+      bash scripts/deploy.sh --domain example.test --skip-route --demo --no-install-cloudflared
+  )
 
   assert_contains "${fixture}/.env" "BASE_DOMAIN=example.test"
   assert_contains "${fixture}/.env" "TRAEFIK_DASHBOARD_HOST=traefik.example.test"
@@ -110,10 +128,37 @@ run_deploy_behavior_test() {
   assert_contains "$log" "cloudflared tunnel create easygate-home"
   assert_contains "$log" "docker compose up -d"
   compose_calls="$(grep -Fc -- "docker compose" "$log")"
-  [[ "$compose_calls" -ge 3 ]] || fail "启用 --demo 后 docker compose 调用次数不足：${compose_calls}"
+  [[ "$compose_calls" -ge 6 ]] || fail "重复启用 --demo 后 docker compose 调用次数不足：${compose_calls}"
 
   if grep -Fq "cloudflared tunnel route dns" "$log"; then
     fail "--skip-route 仍调用了 tunnel route dns"
+  fi
+}
+
+run_compose_deploy_blocks_native_test() {
+  local fixture="${TMP_DIR}/compose-blocks-native-fixture"
+  local home="${TMP_DIR}/compose-blocks-native-home"
+  local bin="${TMP_DIR}/compose-blocks-native-bin"
+  local log="${TMP_DIR}/compose-blocks-native.log"
+
+  info "验证原生模式运行时 Docker Compose 部署会被阻止"
+  make_fixture "$fixture"
+  make_mock_bin "$bin" "$log"
+
+  mkdir -p "${home}/.cloudflared" "${fixture}/.easygate/run"
+  printf 'cert\n' > "${home}/.cloudflared/cert.pem"
+  printf '%s\n' "$$" > "${fixture}/.easygate/run/native-traefik.pid"
+
+  if (
+    cd "$fixture"
+    HOME="$home" EASYGATE_CLOUDFLARED_HOME="${home}/.cloudflared" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" \
+      bash scripts/deploy.sh --domain example.test --skip-route --no-install-cloudflared
+  ); then
+    fail "原生模式运行时 deploy.sh 不应继续部署"
+  fi
+
+  if grep -Fq "docker compose up -d" "$log"; then
+    fail "原生模式运行时 deploy.sh 不应调用 docker compose up"
   fi
 }
 
@@ -157,9 +202,110 @@ run_cleanup_behavior_test() {
   assert_missing "${fixture}/cloudflared/easygate-home.json"
 }
 
+run_native_deploy_behavior_test() {
+  local fixture="${TMP_DIR}/native-deploy-fixture"
+  local home="${TMP_DIR}/native-home"
+  local bin="${TMP_DIR}/native-bin"
+  local log="${TMP_DIR}/native-commands.log"
+
+  info "验证原生部署脚本生成 file provider 配置并启动本地进程"
+  make_fixture "$fixture"
+  make_mock_bin "$bin" "$log"
+
+  mkdir -p "${home}/.cloudflared" "${fixture}/cloudflared"
+  printf 'cert\n' > "${home}/.cloudflared/cert.pem"
+  printf '{"source":"native"}\n' > "${home}/.cloudflared/0000.json"
+
+  (
+    cd "$fixture"
+    HOME="$home" EASYGATE_CLOUDFLARED_HOME="${home}/.cloudflared" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" \
+      bash scripts/deploy-native.sh --domain example.test --skip-route --no-install-cloudflared --no-install-traefik
+  )
+  (
+    cd "$fixture"
+    HOME="$home" EASYGATE_CLOUDFLARED_HOME="${home}/.cloudflared" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" \
+      bash scripts/deploy-native.sh --domain example.test --skip-route --no-install-cloudflared --no-install-traefik
+  )
+
+  assert_contains "${fixture}/.env" "EASYGATE_DEPLOY_MODE=native"
+  assert_contains "${fixture}/.easygate/native/traefik.yml" "providers:"
+  assert_contains "${fixture}/.easygate/native/traefik.yml" ".easygate/native/dynamic"
+  assert_contains "${fixture}/.easygate/native/dynamic/services.yml" "service: api@internal"
+  assert_contains "${fixture}/cloudflared/config.native.yml" "service: http://127.0.0.1:18080"
+  assert_contains "$log" "traefik --configFile="
+  assert_contains "$log" ".easygate/native/traefik.yml"
+  assert_contains "$log" "cloudflared tunnel --config"
+  assert_contains "$log" "cloudflared/config.native.yml run"
+
+  if grep -Fq "docker:" "${fixture}/.easygate/native/traefik.yml"; then
+    fail "原生 Traefik 配置不应启用 docker provider"
+  fi
+  if grep -Fq "cloudflared tunnel route dns" "$log"; then
+    fail "原生部署 --skip-route 仍调用了 tunnel route dns"
+  fi
+}
+
+run_native_deploy_blocks_compose_test() {
+  local fixture="${TMP_DIR}/native-blocks-compose-fixture"
+  local home="${TMP_DIR}/native-blocks-compose-home"
+  local bin="${TMP_DIR}/native-blocks-compose-bin"
+  local log="${TMP_DIR}/native-blocks-compose.log"
+
+  info "验证 Docker Compose 模式运行时原生部署会被阻止"
+  make_fixture "$fixture"
+  make_mock_bin "$bin" "$log"
+
+  mkdir -p "${home}/.cloudflared"
+  printf 'cert\n' > "${home}/.cloudflared/cert.pem"
+
+  if (
+    cd "$fixture"
+    HOME="$home" EASYGATE_CLOUDFLARED_HOME="${home}/.cloudflared" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" EASYGATE_MOCK_COMPOSE_RUNNING=true \
+      bash scripts/deploy-native.sh --domain example.test --skip-route --no-install-cloudflared --no-install-traefik
+  ); then
+    fail "Docker Compose 模式运行时 deploy-native.sh 不应继续部署"
+  fi
+
+  assert_missing "${fixture}/.easygate/native/traefik.yml"
+}
+
+run_native_cleanup_behavior_test() {
+  local fixture="${TMP_DIR}/native-cleanup-fixture"
+
+  info "验证原生清理脚本默认保留配置，purge 删除原生运行配置"
+  make_fixture "$fixture"
+
+  mkdir -p "${fixture}/.easygate/native" "${fixture}/.easygate/run" "${fixture}/.easygate/logs" "${fixture}/cloudflared"
+  printf 'traefik\n' > "${fixture}/.easygate/native/traefik.yml"
+  printf 'pid\n' > "${fixture}/.easygate/run/native-traefik.pid"
+  printf 'log\n' > "${fixture}/.easygate/logs/native-traefik.log"
+  printf 'cloudflared\n' > "${fixture}/cloudflared/config.native.yml"
+
+  (
+    cd "$fixture"
+    bash scripts/cleanup-native.sh
+  )
+  assert_file "${fixture}/.easygate/native/traefik.yml"
+  assert_file "${fixture}/cloudflared/config.native.yml"
+  assert_missing "${fixture}/.easygate/run/native-traefik.pid"
+
+  (
+    cd "$fixture"
+    bash scripts/cleanup-native.sh --purge
+  )
+  assert_missing "${fixture}/.easygate/native"
+  assert_missing "${fixture}/.easygate/run"
+  assert_missing "${fixture}/.easygate/logs"
+  assert_missing "${fixture}/cloudflared/config.native.yml"
+}
+
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 run_deploy_behavior_test
+run_compose_deploy_blocks_native_test
+run_native_deploy_behavior_test
+run_native_deploy_blocks_compose_test
 run_cleanup_behavior_test
+run_native_cleanup_behavior_test
 
 info "行为测试通过"

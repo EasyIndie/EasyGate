@@ -35,14 +35,21 @@ Write-Info "检查关键文件"
   "scripts/test.ps1",
   "scripts/cleanup.sh",
   "scripts/cleanup.ps1",
+  "scripts/cleanup-native.sh",
+  "scripts/cleanup-native.ps1",
   "scripts/deploy.sh",
   "scripts/deploy.ps1",
+  "scripts/deploy-native.sh",
+  "scripts/deploy-native.ps1",
   "scripts/uninstall.sh",
   "scripts/uninstall.ps1",
   "scripts/local-acceptance.sh",
   "scripts/local-acceptance.ps1",
+  "scripts/local-acceptance-native.sh",
+  "scripts/local-acceptance-native.ps1",
   "scripts/behavior-test.sh",
-  "scripts/behavior-test.ps1"
+  "scripts/behavior-test.ps1",
+  "scripts/native-demo-server.py"
 ) | ForEach-Object { Require-File $_ }
 
 Write-Info "检查旧项目名残留"
@@ -71,10 +78,24 @@ if ($ParseErrors) {
 }
 
 $ParseErrors = $null
+$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/cleanup-native.ps1), [ref]$ParseErrors)
+if ($ParseErrors) {
+  $ParseErrors | Format-List
+  Fail "cleanup-native.ps1 存在语法错误"
+}
+
+$ParseErrors = $null
 $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/deploy.ps1), [ref]$ParseErrors)
 if ($ParseErrors) {
   $ParseErrors | Format-List
   Fail "deploy.ps1 存在语法错误"
+}
+
+$ParseErrors = $null
+$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/deploy-native.ps1), [ref]$ParseErrors)
+if ($ParseErrors) {
+  $ParseErrors | Format-List
+  Fail "deploy-native.ps1 存在语法错误"
 }
 
 $ParseErrors = $null
@@ -89,6 +110,13 @@ $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scri
 if ($ParseErrors) {
   $ParseErrors | Format-List
   Fail "local-acceptance.ps1 存在语法错误"
+}
+
+$ParseErrors = $null
+$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/local-acceptance-native.ps1), [ref]$ParseErrors)
+if ($ParseErrors) {
+  $ParseErrors | Format-List
+  Fail "local-acceptance-native.ps1 存在语法错误"
 }
 
 $ParseErrors = $null
@@ -159,6 +187,41 @@ if ($DeployPs -notmatch "cloudflared-windows-") {
   Fail "deploy.ps1 缺少 Windows cloudflared 下载逻辑"
 }
 
+Write-Info "检查原生模式入口"
+$DeployNativeSh = Get-Content -Raw scripts/deploy-native.sh
+$DeployNativePs = Get-Content -Raw scripts/deploy-native.ps1
+$LocalNativePs = Get-Content -Raw scripts/local-acceptance-native.ps1
+if ($DeployNativeSh -notmatch "--local-only") {
+  Fail "deploy-native.sh 缺少 local-only 验收入口"
+}
+if ($DeployNativeSh -notmatch "traefik_v") {
+  Fail "deploy-native.sh 缺少 Traefik 下载逻辑"
+}
+if ($DeployNativeSh -notmatch "config.native.yml") {
+  Fail "deploy-native.sh 缺少原生 cloudflared 配置"
+}
+if ($DeployNativeSh -notmatch "providers:") {
+  Fail "deploy-native.sh 缺少原生 Traefik 配置生成"
+}
+if ($DeployNativePs -notmatch "config.native.yml") {
+  Fail "deploy-native.ps1 缺少原生 cloudflared 配置"
+}
+if ($LocalNativePs -notmatch "deploy-native.ps1") {
+  Fail "local-acceptance-native.ps1 未调用原生部署入口"
+}
+if ($DeploySh -notmatch "assert_no_native_deployment") {
+  Fail "deploy.sh 缺少原生模式互斥检查"
+}
+if ($DeployNativeSh -notmatch "assert_no_compose_deployment") {
+  Fail "deploy-native.sh 缺少 Compose 模式互斥检查"
+}
+if ($DeployPs -notmatch "Test-NativeDeploymentActive") {
+  Fail "deploy.ps1 缺少原生模式互斥检查"
+}
+if ($DeployNativePs -notmatch "Test-ComposeDeploymentActive") {
+  Fail "deploy-native.ps1 缺少 Compose 模式互斥检查"
+}
+
 Write-Info "检查 GitHub Actions Node 24 兼容配置"
 $WorkflowText = Get-Content -Raw ".github/workflows/ci.yml"
 if ($WorkflowText -notmatch "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24") {
@@ -202,12 +265,7 @@ foreach ($File in $DocFiles) {
 }
 
 Write-Info "运行 PowerShell 行为测试"
-try {
-  & ".\scripts\behavior-test.ps1"
-}
-catch {
-  Write-Host "[test] PowerShell 行为测试失败，请后续修复；当前不阻断基础 CI：$($_.Exception.Message)" -ForegroundColor Yellow
-}
+& ".\scripts\behavior-test.ps1"
 
 Write-Info "检查 Docker Compose 配置"
 if (Get-Command docker -ErrorAction SilentlyContinue) {

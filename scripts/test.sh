@@ -37,12 +37,19 @@ require_file "scripts/cleanup.sh"
 require_file "scripts/cleanup.ps1"
 require_file "scripts/deploy.sh"
 require_file "scripts/deploy.ps1"
+require_file "scripts/deploy-native.sh"
+require_file "scripts/deploy-native.ps1"
 require_file "scripts/uninstall.sh"
 require_file "scripts/uninstall.ps1"
 require_file "scripts/local-acceptance.sh"
 require_file "scripts/local-acceptance.ps1"
+require_file "scripts/local-acceptance-native.sh"
+require_file "scripts/local-acceptance-native.ps1"
 require_file "scripts/behavior-test.sh"
 require_file "scripts/behavior-test.ps1"
+require_file "scripts/cleanup-native.sh"
+require_file "scripts/cleanup-native.ps1"
+require_file "scripts/native-demo-server.py"
 
 info "检查旧项目名残留"
 if grep -R "[E]asyTLS\|[e]asytls\|[E]ASYTLS" \
@@ -55,9 +62,12 @@ fi
 info "检查 Bash 脚本语法"
 bash -n scripts/test.sh
 bash -n scripts/cleanup.sh
+bash -n scripts/cleanup-native.sh
 bash -n scripts/deploy.sh
+bash -n scripts/deploy-native.sh
 bash -n scripts/uninstall.sh
 bash -n scripts/local-acceptance.sh
+bash -n scripts/local-acceptance-native.sh
 bash -n scripts/behavior-test.sh
 
 if command -v shellcheck >/dev/null 2>&1; then
@@ -65,9 +75,12 @@ if command -v shellcheck >/dev/null 2>&1; then
   if ! shellcheck \
     scripts/test.sh \
     scripts/cleanup.sh \
+    scripts/cleanup-native.sh \
     scripts/deploy.sh \
+    scripts/deploy-native.sh \
     scripts/uninstall.sh \
     scripts/local-acceptance.sh \
+    scripts/local-acceptance-native.sh \
     scripts/behavior-test.sh; then
     warn "ShellCheck 发现问题，请后续修复；当前不阻断基础 CI"
   fi
@@ -92,6 +105,16 @@ grep -q "EASYGATE_CLOUDFLARED_HOME" scripts/deploy.ps1 || fail "deploy.ps1 缺�
 grep -q "cloudflared-linux-" scripts/deploy.sh || fail "deploy.sh 缺少 Linux cloudflared 下载逻辑"
 grep -q "cloudflared-darwin-" scripts/deploy.sh || fail "deploy.sh 缺少 macOS cloudflared 下载逻辑"
 grep -q "cloudflared-windows-" scripts/deploy.ps1 || fail "deploy.ps1 缺少 Windows cloudflared 下载逻辑"
+
+info "检查原生模式入口"
+grep -q -- "--local-only" scripts/deploy-native.sh || fail "deploy-native.sh 缺少 local-only 验收入口"
+grep -q "traefik_v" scripts/deploy-native.sh || fail "deploy-native.sh 缺少 Traefik 下载逻辑"
+grep -q "config.native.yml" scripts/deploy-native.sh || fail "deploy-native.sh 缺少原生 cloudflared 配置"
+grep -q "providers:" scripts/deploy-native.sh || fail "deploy-native.sh 缺少原生 Traefik 配置生成"
+grep -q "deploy-native.ps1" scripts/local-acceptance-native.ps1 || fail "local-acceptance-native.ps1 未调用原生部署入口"
+grep -q "config.native.yml" scripts/deploy-native.ps1 || fail "deploy-native.ps1 缺少原生 cloudflared 配置"
+grep -q "assert_no_native_deployment" scripts/deploy.sh || fail "deploy.sh 缺少原生模式互斥检查"
+grep -q "assert_no_compose_deployment" scripts/deploy-native.sh || fail "deploy-native.sh 缺少 Compose 模式互斥检查"
 
 info "检查 GitHub Actions Node 24 兼容配置"
 grep -q "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24" .github/workflows/ci.yml || fail "CI 缺少 Node 24 opt-in"

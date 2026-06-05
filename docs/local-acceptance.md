@@ -1,8 +1,9 @@
 # 验收
 
-EasyGate 验收分两类：
+EasyGate 验收分三类：
 
 - 本机验收：只验证 Traefik 路由和 Docker 自动发现，不需要真实域名或 Cloudflare Tunnel。
+- 原生本机验收：只验证原生 Traefik file provider 路由，不需要 Docker、真实域名或 Cloudflare Tunnel。
 - 公网 HTTPS 验收：验证 Cloudflare DNS、HTTPS、Tunnel、Traefik 和 demo 服务完整链路。
 
 ## 静态检查
@@ -79,6 +80,22 @@ curl -I -H "Host: missing.example.com" http://127.0.0.1:18080
 make local-down
 ```
 
+## 原生本机路由验收
+
+macOS / Linux：
+
+```sh
+make local-acceptance-native
+```
+
+Windows PowerShell：
+
+```powershell
+.\scripts\local-acceptance-native.ps1
+```
+
+脚本会启动原生 Traefik 和两个 demo HTTP 服务，通过 `api.example.com`、`test-api.example.com` 和未配置域名验证 file provider 路由行为。它不启动 `cloudflared`，也不需要 tunnel 凭据。
+
 ## 公网 HTTPS 验收
 
 完成部署后启动 demo：
@@ -141,4 +158,5 @@ docker compose --profile demo rm -f demo-api demo-test-api
 GitHub Actions 会在 Ubuntu、macOS、Windows 上运行检查。
 
 - Ubuntu 强制执行完整容器级本机验收。
+- Ubuntu 强制执行原生本机验收。
 - macOS 和 Windows 会运行同一入口脚本；如果托管环境没有可用 Docker daemon，会明确跳过运行时验收。

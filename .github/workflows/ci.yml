@@ -31,6 +31,11 @@ jobs:
           EASYGATE_ACCEPTANCE_STRICT: ${{ matrix.os == 'ubuntu-latest' && 'true' || 'false' }}
         run: ./scripts/local-acceptance.sh
 
+      - name: Run native local acceptance
+        env:
+          EASYGATE_ACCEPTANCE_STRICT: ${{ matrix.os == 'ubuntu-latest' && 'true' || 'false' }}
+        run: ./scripts/local-acceptance-native.sh
+
   windows:
     name: windows-latest / powershell
     runs-on: windows-latest
@@ -48,3 +53,9 @@ jobs:
         env:
           EASYGATE_ACCEPTANCE_STRICT: "false"
         run: .\scripts\local-acceptance.ps1
+
+      - name: Run native local acceptance
+        shell: pwsh
+        env:
+          EASYGATE_ACCEPTANCE_STRICT: "false"
+        run: .\scripts\local-acceptance-native.ps1

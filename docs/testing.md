@@ -39,6 +39,7 @@ Windows 11 PowerShell：
 - Docker Compose 配置是否能渲染。
 - 清理脚本语法。
 - 本机验收脚本语法。
+- 原生部署、清理和本机验收脚本语法。
 
 ## 可选依赖
 
@@ -47,7 +48,7 @@ Windows 11 PowerShell：
 - 没有 Docker 时，跳过 `docker compose config`。
 - 没有 Ruby 时，跳过 YAML 解析检查。
 - 没有 ShellCheck 时，跳过 Bash lint。
-- PowerShell 语法由 Windows CI 的 `scripts/test.ps1` 强制覆盖；PowerShell 行为测试会运行并报告问题，但当前不阻断基础 CI。
+- PowerShell 语法和行为测试由 Windows CI 的 `scripts/test.ps1` 强制覆盖。
 
 这让低配部署设备也可以运行基础测试。
 
@@ -67,7 +68,7 @@ macos-latest：make test
 windows-latest：.\scripts\test.ps1
 ```
 
-CI 还会运行本机验收脚本。Ubuntu 强制跑完整容器级验收；macOS 和 Windows 在 Docker daemon 不可用时会跳过运行时验收，但仍覆盖入口脚本兼容性。
+CI 还会运行本机验收脚本和原生本机验收脚本。Ubuntu 强制跑完整容器级验收和原生本机验收；macOS 和 Windows 在 Docker daemon 或运行环境不可用时会跳过运行时验收，但仍覆盖入口脚本兼容性。
 
 ## 本机验收
 
@@ -78,6 +79,14 @@ make local-acceptance
 ```
 
 它会启动 Traefik 和 demo 服务，通过 curl 验证生产域名、测试域名和未配置域名的路由行为。详细说明见 [local-acceptance.md](local-acceptance.md)。
+
+原生本机路由验收由 `scripts/local-acceptance-native.sh` 和 `scripts/local-acceptance-native.ps1` 提供：
+
+```sh
+make local-acceptance-native
+```
+
+它会启动原生 Traefik 和 demo HTTP 服务，验证 file provider 路由行为，不依赖 Docker 或 Cloudflare Tunnel。
 
 ## 行为测试
 
@@ -91,6 +100,12 @@ make local-acceptance
 - `--demo` / `-Demo` 会启动 demo 服务。
 - 清理脚本默认保留本地配置和 tunnel 凭据。
 - purge 只有确认输入 `yes` 后才删除本地生成文件。
+- 原生部署脚本生成不含 Docker provider 的 Traefik 配置。
+- 原生部署脚本生成 `cloudflared/config.native.yml`，入口指向本机 Traefik。
+- 原生清理脚本默认保留配置，`--purge` / `-Purge` 删除原生运行配置。
+- Compose 模式和原生模式分别覆盖重复部署行为。
+- 原生模式运行时，Compose 部署脚本会拒绝交叉部署。
+- Compose 模式运行时，原生部署脚本会拒绝交叉部署。
 
 ## 依赖更新
 
