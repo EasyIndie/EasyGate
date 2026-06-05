@@ -83,13 +83,16 @@ else {
   }
 }
 
-Write-Host "[install] easygate.ps1 已安装到：$Target"
-Write-Host "[install] 运行时目录：$EasyGateHome"
-Write-Host "[install] 可选：将 $InstallDir 加入 PATH"
-Write-Host "[install] DEBUG: CommandArgs.Count = $($CommandArgs.Count), items = [$($CommandArgs -join '|')]"
+Write-Host "[install] ✅ 安装完成"
+Write-Host "   CLI 路径：$Target"
+Write-Host "   运行时目录：$EasyGateHome"
+Write-Host ""
+Write-Host "   添加到 PATH 以便直接使用 easygate.ps1 命令："
+Write-Host "   `$env:Path = `"$InstallDir;`$env:Path`""
+Write-Host "   或系统设置 → 环境变量 → PATH 添加：$InstallDir"
+Write-Host ""
 
 if ($CommandArgs.Count -gt 0 -and $CommandArgs[0] -ne '') {
-  Write-Host "[install] 转发参数到 easygate.ps1：$($CommandArgs -join ' ')"
   & $Target @CommandArgs
   if ($null -eq $LASTEXITCODE) {
     exit 0
@@ -97,4 +100,7 @@ if ($CommandArgs.Count -gt 0 -and $CommandArgs[0] -ne '') {
   exit $LASTEXITCODE
 }
 
-Write-Host "[install] 部署示例：powershell -ExecutionPolicy Bypass -File `"$Target`" deploy -Domain example.com"
+Write-Host "   直接部署："
+Write-Host "   powershell -ExecutionPolicy Bypass -File `"$Target`" deploy -Domain example.com"
+Write-Host "   或先加入 PATH 后："
+Write-Host "   easygate.ps1 deploy -Domain example.com"

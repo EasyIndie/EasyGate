@@ -47,12 +47,26 @@ fi
 
 chmod +x "$TARGET"
 
-info "easygate 已安装到：${TARGET}"
-info "运行时目录：${EASYGATE_HOME}"
-info "可选：将 ${INSTALL_DIR} 加入 PATH"
+printf '\n'
+info "✅ 安装完成"
+printf '   CLI 路径：\033[1m%s\033[0m\n' "$TARGET"
+printf '   运行时目录：%s\n' "$EASYGATE_HOME"
+printf '\n'
+printf '   添加到 PATH 以便直接使用 easygate 命令：\n'
+case "$(uname -s)" in
+  Darwin|Linux)
+    printf '   \033[2mexport PATH="%s:$PATH"\033[0m\n' "$INSTALL_DIR"
+    printf '   或 \033[2msource ~/.bashrc\033[0m/\033[2m~/.zshrc\033[0m 后永久生效：\n'
+    printf '   \033[2m  echo '\''export PATH="%s:$PATH"'\'' >> ~/.bashrc\033[0m\n' "$INSTALL_DIR"
+    ;;
+esac
+printf '\n'
 
 if [[ $# -gt 0 ]]; then
   exec "$TARGET" "$@"
 fi
 
-info "部署示例：${TARGET} deploy --domain example.com"
+printf '   直接部署：\n'
+printf '   \033[1m%s deploy --domain example.com\033[0m\n' "$TARGET"
+printf '   或先加入 PATH 后：\n'
+printf '   \033[1measygate deploy --domain example.com\033[0m\n'
