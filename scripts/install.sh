@@ -66,10 +66,11 @@ detect_rc_file() {
 
 add_to_path() {
   local rc_file="$1"
-  local export_line="export PATH=\"\${EASYGATE_HOME:-${INSTALL_DIR}}:\$PATH\""
+  # 直接写入绝对路径，不含变量引用，简单可靠
+  local export_line="export PATH=\"${INSTALL_DIR}:\$PATH\""
 
-  # 如果已经配置过则跳过
-  if grep -qs 'easygate_home.*PATH\|EASYGATE_HOME.*bin' "$rc_file" 2>/dev/null; then
+  # 如果已经配置过则跳过（检查不同形式避免重复）
+  if grep -qs "${INSTALL_DIR}" "$rc_file" 2>/dev/null; then
     return 0
   fi
 
