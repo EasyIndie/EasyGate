@@ -59,9 +59,9 @@ function New-MockBin {
   "" | Set-Content -Path $LogFile
 
   @'
-param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
-Add-Content -Path $env:EASYGATE_MOCK_LOG -Value ("docker " + ($Args -join " "))
-if ($Args.Count -ge 5 -and $Args[0] -eq "compose" -and $Args[1] -eq "ps" -and $Args[2] -eq "--services" -and $Args[3] -eq "--status" -and $Args[4] -eq "running") {
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$CommandArgs)
+Add-Content -Path $env:EASYGATE_MOCK_LOG -Value ("docker " + ($CommandArgs -join " "))
+if ($CommandArgs.Count -ge 5 -and $CommandArgs[0] -eq "compose" -and $CommandArgs[1] -eq "ps" -and $CommandArgs[2] -eq "--services" -and $CommandArgs[3] -eq "--status" -and $CommandArgs[4] -eq "running") {
   if ($env:EASYGATE_MOCK_COMPOSE_RUNNING -eq "true") {
     Write-Output "traefik"
     Write-Output "cloudflared"
@@ -71,17 +71,17 @@ exit 0
 '@ | Set-Content -Path (Join-Path $BinDir "docker.ps1") -Encoding UTF8
 
   @'
-param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
-Add-Content -Path $env:EASYGATE_MOCK_LOG -Value ("cloudflared " + ($Args -join " "))
-if ($Args.Count -ge 2 -and $Args[0] -eq "tunnel" -and $Args[1] -eq "create") {
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$CommandArgs)
+Add-Content -Path $env:EASYGATE_MOCK_LOG -Value ("cloudflared " + ($CommandArgs -join " "))
+if ($CommandArgs.Count -ge 2 -and $CommandArgs[0] -eq "tunnel" -and $CommandArgs[1] -eq "create") {
   exit 1
 }
 exit 0
 '@ | Set-Content -Path (Join-Path $BinDir "cloudflared.ps1") -Encoding UTF8
 
   @'
-param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
-Add-Content -Path $env:EASYGATE_MOCK_LOG -Value ("traefik " + ($Args -join " "))
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$CommandArgs)
+Add-Content -Path $env:EASYGATE_MOCK_LOG -Value ("traefik " + ($CommandArgs -join " "))
 exit 0
 '@ | Set-Content -Path (Join-Path $BinDir "traefik.ps1") -Encoding UTF8
 
@@ -123,6 +123,36 @@ function Invoke-WithMockPath {
   }
   finally {
     $env:PATH = $OldPath
+  }
+}
+
+function Invoke-ExpectedNativeFailure {
+  param(
+    [scriptblock]$Body,
+    [string]$Message
+  )
+
+  $HadNativePreference = Test-Path Variable:PSNativeCommandUseErrorActionPreference
+  if ($HadNativePreference) {
+    $OldNativePreference = $PSNativeCommandUseErrorActionPreference
+    $PSNativeCommandUseErrorActionPreference = $false
+  }
+
+  try {
+    & $Body | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+      Fail $Message
+    }
+  }
+  catch {
+    if ($LASTEXITCODE -eq 0) {
+      throw
+    }
+  }
+  finally {
+    if ($HadNativePreference) {
+      $PSNativeCommandUseErrorActionPreference = $OldNativePreference
+    }
   }
 }
 
@@ -195,10 +225,9 @@ function Test-ComposeDeployBlocksNative {
     Invoke-WithMockPath $BinDir {
       Push-Location $Fixture
       try {
-        & pwsh -NoProfile -File ".\scripts\deploy.ps1" -Domain "example.test" -SkipRoute -NoInstallCloudflared | Out-Null
-        if ($LASTEXITCODE -eq 0) {
-          Fail "原生模式运行时 deploy.ps1 不应继续部署"
-        }
+        Invoke-ExpectedNativeFailure {
+          & pwsh -NoProfile -File ".\scripts\deploy.ps1" -Domain "example.test" -SkipRoute -NoInstallCloudflared
+        } "原生模式运行时 deploy.ps1 不应继续部署"
       }
       finally {
         Pop-Location
@@ -376,10 +405,9 @@ function Test-NativeDeployBlocksCompose {
     Invoke-WithMockPath $BinDir {
       Push-Location $Fixture
       try {
-        & pwsh -NoProfile -File ".\scripts\deploy-native.ps1" -Domain "example.test" -SkipRoute -NoInstallCloudflared -NoInstallTraefik | Out-Null
-        if ($LASTEXITCODE -eq 0) {
-          Fail "Docker Compose 模式运行时 deploy-native.ps1 不应继续部署"
-        }
+        Invoke-ExpectedNativeFailure {
+          & pwsh -NoProfile -File ".\scripts\deploy-native.ps1" -Domain "example.test" -SkipRoute -NoInstallCloudflared -NoInstallTraefik
+        } "Docker Compose 模式运行时 deploy-native.ps1 不应继续部署"
       }
       finally {
         Pop-Location
