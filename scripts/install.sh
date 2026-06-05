@@ -26,6 +26,59 @@ default_easygate_home() {
   esac
 }
 
+# ── PATH 自动配置 ──────────────────────────────────────────────────────
+
+detect_rc_file() {
+  # 按优先级检测：当前 SHELL 的配置文件 > 常用默认文件
+  local shell_name
+  shell_name="$(basename "${SHELL:-}" 2>/dev/null || true)"
+  case "$shell_name" in
+    zsh)
+      # macOS 用户默认 zsh，～/.zshrc 是标准配置文件
+      printf '%s/.zshrc' "$HOME"
+      return
+      ;;
+    bash)
+      # Linux 用 ～/.bashrc，macOS 用 ～/.bash_profile
+      case "$(uname -s)" in
+        Darwin)
+          if [[ -f "$HOME/.bash_profile" ]]; then
+            printf '%s/.bash_profile' "$HOME"
+          else
+            printf '%s/.bashrc' "$HOME"
+          fi
+          ;;
+        *) printf '%s/.bashrc' "$HOME" ;;
+      esac
+      return
+      ;;
+  esac
+  # 未知 SHELL —— 探测存在的常用文件
+  for f in .zshrc .bashrc .bash_profile .profile; do
+    if [[ -f "$HOME/$f" ]]; then
+      printf '%s/%s' "$HOME" "$f"
+      return
+    fi
+  done
+  # 退回到 .profile（几乎所有 POSIX shell 都加载）
+  printf '%s/.profile' "$HOME"
+}
+
+add_to_path() {
+  local rc_file="$1"
+  local export_line="export PATH=\"\${EASYGATE_HOME:-${INSTALL_DIR}}:\$PATH\""
+
+  # 如果已经配置过则跳过
+  if grep -qs 'easygate_home.*PATH\|EASYGATE_HOME.*bin' "$rc_file" 2>/dev/null; then
+    return 0
+  fi
+
+  printf '\n# EasyGate CLI\n%s\n' "$export_line" >> "$rc_file"
+  info "已将 CLI 目录写入 ${rc_file}"
+}
+
+# ── 主流程 ─────────────────────────────────────────────────────────────
+
 REPO="${EASYGATE_REPO:-EasyIndie/EasyGate}"
 REF="${EASYGATE_REF:-main}"
 SOURCE_URL="${EASYGATE_CLI_URL:-https://raw.githubusercontent.com/${REPO}/${REF}/scripts/easygate}"
@@ -52,14 +105,17 @@ info "✅ 安装完成"
 printf '   CLI 路径：\033[1m%s\033[0m\n' "$TARGET"
 printf '   运行时目录：%s\n' "$EASYGATE_HOME"
 printf '\n'
-printf '   添加到 PATH 以便直接使用 easygate 命令：\n'
+
+# 自动写入 shell 配置文件
 case "$(uname -s)" in
   Darwin|Linux)
-    printf '   \033[2mexport PATH="%s:$PATH"\033[0m\n' "$INSTALL_DIR"
-    printf '   或 \033[2msource ~/.bashrc\033[0m/\033[2m~/.zshrc\033[0m 后永久生效：\n'
-    printf '   \033[2m  echo '\''export PATH="%s:$PATH"'\'' >> ~/.bashrc\033[0m\n' "$INSTALL_DIR"
+    rc_file="$(detect_rc_file)"
+    add_to_path "$rc_file"
+    export PATH="${INSTALL_DIR}:$PATH"
+    info "当前会话已生效，新终端窗口自动生效"
     ;;
 esac
+
 printf '\n'
 
 if [[ $# -gt 0 ]]; then
@@ -67,6 +123,5 @@ if [[ $# -gt 0 ]]; then
 fi
 
 printf '   直接部署：\n'
-printf '   \033[1m%s deploy --domain example.com\033[0m\n' "$TARGET"
-printf '   或先加入 PATH 后：\n'
 printf '   \033[1measygate deploy --domain example.com\033[0m\n'
+printf '   \033[2m（已加入 PATH，可直接使用 easygate 命令）\033[0m\n'
