@@ -1,3 +1,4 @@
+[CmdletBinding(PositionalBinding=$false)]
 param(
   [string]$Domain,
   [string]$Tunnel,
