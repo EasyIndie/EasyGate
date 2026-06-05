@@ -203,17 +203,20 @@ Traefik 会监听动态配置目录并自动重载。
 
 ## 域名约定
 
-Cloudflare Free 的 Universal SSL 默认覆盖根域名和一级子域名。推荐：
+> **重要**：Cloudflare Free 的 Universal SSL 通配证书**只覆盖根域名和一级子域名**。使用更深层级域名（如 `api.internal.example.com`）会导致 TLS 证书不匹配，浏览器显示安全警告。详细限制见 [docs/cloudflare-free-limits.md](docs/cloudflare-free-limits.md)。
+
+推荐使用一级子域名：
 
 ```text
-api.example.com
-test-api.example.com
+✅ api.example.com
+✅ test-api.example.com
 ```
 
-避免依赖更深层级域名：
+避免使用更深层级域名：
 
 ```text
-test.api.example.com
+❌ test.api.example.com        （二级子域名，证书不覆盖）
+❌ api.nas-home.example.com    （二级子域名，证书不覆盖）
 ```
 
 如果 Cloudflare DNS 里已有不需要进入 EasyGate 的具体记录，保留它们即可。具体记录优先于 `*.example.com` 通配记录。

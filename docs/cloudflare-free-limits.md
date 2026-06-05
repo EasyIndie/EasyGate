@@ -1,5 +1,23 @@
 # Cloudflare Free 限制说明
 
+## SSL/TLS 证书覆盖范围（重要）
+
+Cloudflare Free 的 Universal SSL 使用通配证书，**默认只覆盖根域名和一级子域名**：
+
+```text
+✅ example.com            （根域名）
+✅ api.example.com        （一级子域名）
+✅ test-api.example.com   （一级子域名）
+❌ test.api.example.com   （二级子域名 — 证书不覆盖）
+❌ api.nas.example.com    （二级子域名 — 证书不覆盖）
+```
+
+如果你使用更深层级的子域名（如 `api.internal.example.com`），访问时会因为证书不匹配导致浏览器显示 TLS 警告或连接失败。除非你升级到更高计划或手动上传覆盖更深层级的独立证书，否则**整个 EasyGate 项目都必须使用一级子域名**来命名服务。
+
+这项限制会直接影响：
+- 子域名命名方案（服务名必须是 `xxx.example.com`，不能是 `xxx.device.example.com`）
+- 多设备部署时的域名规划（每台设备需要独立的一级子域名）
+
 ## 请求数
 
 对于本项目的默认路径：

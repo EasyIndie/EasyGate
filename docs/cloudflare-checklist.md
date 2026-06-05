@@ -5,14 +5,16 @@
 - 域名使用 Cloudflare Full DNS setup，权威 nameserver 已切到 Cloudflare。
 - Cloudflare Overview 显示站点已激活。
 - Universal SSL 保持开启。
-- 生产和测试服务使用一级子域名：
+- **所有服务必须使用一级子域名**。Cloudflare Free 的 Universal SSL 通配证书只覆盖根域名和一级子域名，更深层级的子域名（如 `test.service.example.com`）无法被证书覆盖，会导致 TLS 错误：
 
   ```text
-  service.example.com
-  test-service.example.com
+  ✅ service.example.com
+  ✅ test-service.example.com
+  ❌ test.service.example.com
+  ❌ api.internal.example.com
   ```
 
-- 不依赖 `test.service.example.com` 这类更深层级子域名，除非你已单独配置证书覆盖。
+  除非升级计划或单独配置高级证书，否则不要使用二级或更深层级的子域名。详见 [cloudflare-free-limits.md](cloudflare-free-limits.md)。
 
 ## DNS 记录
 

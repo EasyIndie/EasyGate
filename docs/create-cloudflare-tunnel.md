@@ -137,13 +137,17 @@ mail.example.com
 cdn.example.com
 ```
 
-通配入口只接管没有单独配置的名称，例如：
+通配入口只接管没有单独配置的名称。**所有接入 EasyGate 的子域名必须是一级子域名**——Cloudflare Free 的 Universal SSL 证书不覆盖二级或更深层级子域名：
 
 ```text
-api.example.com
-test-api.example.com
-new-service.example.com
+✅ api.example.com
+✅ test-api.example.com
+✅ new-service.example.com
+❌ api.nas.example.com        （证书不覆盖）
+❌ test.service.example.com   （证书不覆盖）
 ```
+
+详见 [cloudflare-free-limits.md](cloudflare-free-limits.md)。
 
 ## 验证
 
