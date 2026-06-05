@@ -271,6 +271,9 @@ foreach ($File in $DocFiles) {
 
 Write-Info "运行 PowerShell 行为测试"
 & ".\scripts\behavior-test.ps1"
+if ($LASTEXITCODE -ne 0) {
+  Fail "PowerShell 行为测试失败（exit code: $LASTEXITCODE）"
+}
 
 Write-Info "检查 Docker Compose 配置"
 if (Get-Command docker -ErrorAction SilentlyContinue) {

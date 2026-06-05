@@ -183,8 +183,10 @@ function Test-DeployBehavior {
 
   $OldCloudflaredHome = $env:EASYGATE_CLOUDFLARED_HOME
   $OldEasyGateHome = $env:EASYGATE_HOME
+  $OldMockLog = $env:EASYGATE_MOCK_LOG
   $env:EASYGATE_CLOUDFLARED_HOME = Join-Path $HomeDir ".cloudflared"
   $env:EASYGATE_HOME = $RuntimeDir
+  $env:EASYGATE_MOCK_LOG = $LogFile
   try {
     Invoke-WithMockPath $BinDir {
       Push-Location $Fixture
@@ -200,6 +202,7 @@ function Test-DeployBehavior {
   finally {
     $env:EASYGATE_CLOUDFLARED_HOME = $OldCloudflaredHome
     $env:EASYGATE_HOME = $OldEasyGateHome
+    $env:EASYGATE_MOCK_LOG = $OldMockLog
   }
 
   Assert-Contains (Join-Path $RuntimeDir "compose/.env") "BASE_DOMAIN=example.test"
@@ -241,8 +244,10 @@ function Test-ComposeDeployBlocksNative {
 
   $OldCloudflaredHome = $env:EASYGATE_CLOUDFLARED_HOME
   $OldEasyGateHome = $env:EASYGATE_HOME
+  $OldMockLog = $env:EASYGATE_MOCK_LOG
   $env:EASYGATE_CLOUDFLARED_HOME = Join-Path $HomeDir ".cloudflared"
   $env:EASYGATE_HOME = $RuntimeDir
+  $env:EASYGATE_MOCK_LOG = $LogFile
   try {
     Invoke-WithMockPath $BinDir {
       Push-Location $Fixture
@@ -259,6 +264,7 @@ function Test-ComposeDeployBlocksNative {
   finally {
     $env:EASYGATE_CLOUDFLARED_HOME = $OldCloudflaredHome
     $env:EASYGATE_HOME = $OldEasyGateHome
+    $env:EASYGATE_MOCK_LOG = $OldMockLog
   }
 
   $LogText = Get-Content -Raw $LogFile
@@ -348,8 +354,10 @@ function Test-NativeDeployBehavior {
 
   $OldCloudflaredHome = $env:EASYGATE_CLOUDFLARED_HOME
   $OldEasyGateHome = $env:EASYGATE_HOME
+  $OldMockLog = $env:EASYGATE_MOCK_LOG
   $env:EASYGATE_CLOUDFLARED_HOME = Join-Path $HomeDir ".cloudflared"
   $env:EASYGATE_HOME = $RuntimeDir
+  $env:EASYGATE_MOCK_LOG = $LogFile
   try {
     Invoke-WithMockPath $BinDir {
       Push-Location $Fixture
@@ -365,6 +373,7 @@ function Test-NativeDeployBehavior {
   finally {
     $env:EASYGATE_CLOUDFLARED_HOME = $OldCloudflaredHome
     $env:EASYGATE_HOME = $OldEasyGateHome
+    $env:EASYGATE_MOCK_LOG = $OldMockLog
   }
 
   Assert-Contains (Join-Path $RuntimeDir "native/.env") "EASYGATE_DEPLOY_MODE=native"
@@ -466,6 +475,7 @@ function Test-NativeDeployBlocksCompose {
   finally {
     $env:EASYGATE_CLOUDFLARED_HOME = $OldCloudflaredHome
     $env:EASYGATE_HOME = $OldEasyGateHome
+    $env:EASYGATE_MOCK_LOG = $OldMockLog
     $env:EASYGATE_MOCK_COMPOSE_RUNNING = $OldMockComposeRunning
   }
 
@@ -490,8 +500,10 @@ function Test-StandaloneCliBehavior {
 
   $OldCloudflaredHome = $env:EASYGATE_CLOUDFLARED_HOME
   $OldEasyGateHome = $env:EASYGATE_HOME
+  $OldMockLog = $env:EASYGATE_MOCK_LOG
   $env:EASYGATE_CLOUDFLARED_HOME = Join-Path $HomeDir ".cloudflared"
   $env:EASYGATE_HOME = $RuntimeDir
+  $env:EASYGATE_MOCK_LOG = $LogFile
   try {
     Invoke-WithMockPath $BinDir {
       Push-Location $Fixture
@@ -506,6 +518,7 @@ function Test-StandaloneCliBehavior {
   finally {
     $env:EASYGATE_CLOUDFLARED_HOME = $OldCloudflaredHome
     $env:EASYGATE_HOME = $OldEasyGateHome
+    $env:EASYGATE_MOCK_LOG = $OldMockLog
   }
 
   Assert-Contains (Join-Path $RuntimeDir "compose/.env") "BASE_DOMAIN=example.test"

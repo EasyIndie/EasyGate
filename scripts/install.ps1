@@ -86,8 +86,10 @@ else {
 Write-Host "[install] easygate.ps1 已安装到：$Target"
 Write-Host "[install] 运行时目录：$EasyGateHome"
 Write-Host "[install] 可选：将 $InstallDir 加入 PATH"
+Write-Host "[install] DEBUG: CommandArgs.Count = $($CommandArgs.Count), items = [$($CommandArgs -join '|')]"
 
-if ($CommandArgs.Count -gt 0) {
+if ($CommandArgs.Count -gt 0 -and $CommandArgs[0] -ne '') {
+  Write-Host "[install] 转发参数到 easygate.ps1：$($CommandArgs -join ' ')"
   & $Target @CommandArgs
   if ($null -eq $LASTEXITCODE) {
     exit 0
