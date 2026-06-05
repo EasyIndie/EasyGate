@@ -52,6 +52,7 @@ Write-Info "检查关键文件"
   "scripts/behavior-test.ps1",
   "scripts/native-demo-server.py",
   "scripts/compose.sh",
+  "scripts/lib.sh",
   "scripts/easygate",
   "scripts/easygate.ps1",
   "scripts/install.sh",
@@ -139,8 +140,9 @@ $InstallPs = Get-Content -Raw scripts/install.ps1
 if ($DeploySh -notmatch "--no-install-cloudflared") {
   Fail "deploy.sh 缺少 cloudflared 自动安装开关"
 }
-if ($DeploySh -notmatch "EASYGATE_CLOUDFLARED_HOME") {
-  Fail "deploy.sh 缺少 cloudflared home 覆盖入口"
+$LibSh = Get-Content -Raw scripts/lib.sh
+if ($LibSh -notmatch "EASYGATE_CLOUDFLARED_HOME") {
+  Fail "lib.sh 缺少 cloudflared home 覆盖入口"
 }
 if ($DeploySh -notmatch "EASYGATE_HOME") {
   Fail "deploy.sh 缺少 EASYGATE_HOME 运行时目录"
@@ -163,11 +165,18 @@ if ($InstallSh -notmatch "EASYGATE_LOCAL_CLI") {
 if ($InstallPs -notmatch "EASYGATE_LOCAL_CLI") {
   Fail "install.ps1 缺少本地 CLI 安装测试入口"
 }
-if ($DeploySh -notmatch "cloudflared-linux-") {
-  Fail "deploy.sh 缺少 Linux cloudflared 下载逻辑"
+if ($LibSh -notmatch "cloudflared-linux-") {
+  Fail "lib.sh 缺少 Linux cloudflared 下载逻辑"
 }
-if ($DeploySh -notmatch "cloudflared-darwin-") {
-  Fail "deploy.sh 缺少 macOS cloudflared 下载逻辑"
+if ($LibSh -notmatch "cloudflared-darwin-") {
+  Fail "lib.sh 缺少 macOS cloudflared 下载逻辑"
+}
+# Standalone CLI must have its own copies of download logic:
+if ($EasyGateSh -notmatch "cloudflared-linux-") {
+  Fail "easygate CLI 缺少 Linux cloudflared 下载逻辑"
+}
+if ($EasyGateSh -notmatch "cloudflared-darwin-") {
+  Fail "easygate CLI 缺少 macOS cloudflared 下载逻辑"
 }
 if ($DeployPs -notmatch "cloudflared-windows-") {
   Fail "deploy.ps1 缺少 Windows cloudflared 下载逻辑"
@@ -183,8 +192,11 @@ $LocalNativePs = Get-Content -Raw scripts/local-acceptance-native.ps1
 if ($DeployNativeSh -notmatch "--local-only") {
   Fail "deploy-native.sh 缺少 local-only 验收入口"
 }
-if ($DeployNativeSh -notmatch "traefik_v") {
-  Fail "deploy-native.sh 缺少 Traefik 下载逻辑"
+if ($LibSh -notmatch "traefik_v") {
+  Fail "lib.sh 缺少 Traefik 下载逻辑"
+}
+if ($EasyGateSh -notmatch "traefik_v") {
+  Fail "easygate CLI 缺少 Traefik 下载逻辑"
 }
 if ($DeployNativeSh -notmatch "config.native.yml") {
   Fail "deploy-native.sh 缺少原生 cloudflared 配置"
