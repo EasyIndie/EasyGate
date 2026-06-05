@@ -1,117 +1,76 @@
-# 自动化测试
+# 测试指南
 
-## 本地测试
-
-运行：
+项目有三层测试体系：静态检查 → 行为测试（mock）→ 本地路由验收。
 
 ```sh
-make test
+make test               # 静态检查 + 行为测试 + YAML 验证
+make behavior-test      # 仅行为测试（mock，无需真实 Cloudflare 账号）
+make local-acceptance   # 本地 Docker 路由验证
+make local-acceptance-native  # 本地原生路由验证
+make lint               # 仅 ShellCheck（需安装 shellcheck）
 ```
 
-或直接运行：
+## 静态检查
 
-```sh
-./scripts/test.sh
-```
+`make test`（`scripts/test.sh` / `scripts/test.ps1`）执行：
 
-只运行部署/清理行为测试：
+- 关键文件存在（`.sh` 和 `.ps1` 双版本）
+- 无旧项目名残留
+- Bash 脚本语法（`bash -n`）
+- ShellCheck（可选，非阻断）
+- `.env.example` 默认值
+- Traefik 网络命名一致性
+- cloudflared 和原生模式入口
+- 文档链接有效性
+- Docker Compose 配置可渲染
 
-```sh
-make behavior-test
-```
+## 行为测试
 
-Windows 11 PowerShell：
+`make behavior-test` 使用 mock 二进制（docker、cloudflared、traefik）隔离真实环境，**不需要**真实 Cloudflare 账号或 Tunnel。
 
-```powershell
-.\scripts\test.ps1
-```
+覆盖场景：
 
-测试内容：
+| 测试 | 验证内容 |
+|------|----------|
+| 部署复用凭据 | 第二次部署不重复创建 Tunnel |
+| `--skip-route` | 跳过 DNS 路由但其他流程正常 |
+| `--demo` | demo 服务正常启动 |
+| 清理保留配置 | 默认 cleanup 不删配置和凭据 |
+| 清理 purge | `--purge` + 确认 `yes` 后删除数据 |
+| 原生部署 | file provider 配置 + 进程启动 |
+| 模式互斥 | Compose 模式阻止原生部署，反之亦然 |
+| 独立 CLI | CLI 不依赖源码仓库（仅 Bash） |
 
-- 关键文件是否存在。
-- 是否残留旧项目名。
-- Bash 部署脚本语法。
-- Bash 部署和清理脚本行为测试。
-- `.env.example` 默认值。
-- Traefik 网络命名是否一致。
-- README 和 docs 中引用的本地文档是否存在。
-- YAML 配置语法。
-- Docker Compose 配置是否能渲染。
-- 清理脚本语法。
-- 本机验收脚本语法。
-- 原生部署、清理和本机验收脚本语法。
+## 本地路由验收
 
-## 可选依赖
+绕开 Cloudflare Tunnel，直接验证 Traefik 本地路由。
 
-本地测试会根据环境自动跳过部分检查：
-
-- 没有 Docker 时，跳过 `docker compose config`。
-- 没有 Ruby 时，跳过 YAML 解析检查。
-- 没有 ShellCheck 时，跳过 Bash lint。
-- PowerShell 语法和行为测试由 Windows CI 的 `scripts/test.ps1` 强制覆盖。
-
-这让低配部署设备也可以运行基础测试。
-
-## CI 测试
-
-项目提供 GitHub Actions 工作流：
-
-```text
-.github/workflows/ci.yml
-```
-
-每次 push 或 pull request 会运行：
-
-```text
-ubuntu-latest：make test
-macos-latest：make test
-windows-latest：.\scripts\test.ps1
-```
-
-CI 还会运行本机验收脚本和原生本机验收脚本。Ubuntu 强制跑完整容器级验收和原生本机验收；macOS 和 Windows 在 Docker daemon 或运行环境不可用时会跳过运行时验收，但仍覆盖入口脚本兼容性。
-
-## 本机验收
-
-本机路由验收由 `scripts/local-acceptance.sh` 和 `scripts/local-acceptance.ps1` 提供：
+### Docker 模式
 
 ```sh
 make local-acceptance
 ```
 
-它会启动 Traefik 和 demo 服务，通过 curl 验证生产域名、测试域名和未配置域名的路由行为。详细说明见 [local-acceptance.md](local-acceptance.md)。
+流程：启动 Traefik + demo → 验证 `api.example.com` 返回 `Hostname:` → 验证 `test-api.example.com` 返回 `Hostname:` → 验证未配置域名返回 `404` → 清理。
 
-原生本机路由验收由 `scripts/local-acceptance-native.sh` 和 `scripts/local-acceptance-native.ps1` 提供：
+### 原生模式
 
 ```sh
 make local-acceptance-native
 ```
 
-它会启动原生 Traefik 和 demo HTTP 服务，验证 file provider 路由行为，不依赖 Docker 或 Cloudflare Tunnel。
+用 `easygate native deploy --domain example.com --demo --local-only` 启动原生 Traefik + Python demo 服务器，执行相同路由验证。
 
-## 行为测试
+用 `EASYGATE_ACCEPTANCE_STRICT=true` 控制严格模式：失败时退出而非跳过。
 
-`scripts/behavior-test.sh` 和 `scripts/behavior-test.ps1` 会在临时目录中 mock `docker` 和 `cloudflared`，不接触真实 Cloudflare 账号、真实 tunnel 凭据或当前部署。
+## CI
 
-覆盖点：
+GitHub Actions 在 `push`、`pull_request` 和每周 cron 时运行，矩阵覆盖三平台：
 
-- 部署脚本在同名 tunnel 已存在时复用本地凭据。
-- 部署脚本可以覆盖只读 tunnel 凭据文件。
-- `--skip-route` / `-SkipRoute` 不调用 DNS route。
-- `--demo` / `-Demo` 会启动 demo 服务。
-- 清理脚本默认保留本地配置和 tunnel 凭据。
-- purge 只有确认输入 `yes` 后才删除本地生成文件。
-- 原生部署脚本生成不含 Docker provider 的 Traefik 配置。
-- 原生部署脚本生成 `cloudflared/config.native.yml`，入口指向本机 Traefik。
-- 原生清理脚本默认保留配置，`--purge` / `-Purge` 删除原生运行配置。
-- Compose 模式和原生模式分别覆盖重复部署行为。
-- 原生模式运行时，Compose 部署脚本会拒绝交叉部署。
-- Compose 模式运行时，原生部署脚本会拒绝交叉部署。
+| 平台 | Shell | 严格 | 备注 |
+|------|-------|------|------|
+| ubuntu-latest | Bash | ✅ | — |
+| macos-latest | Bash | ❌ | Docker 可能不可用 |
+| windows-latest | PowerShell | ❌ | PS7 独立 CLI 子命令已知问题 |
 
-## 依赖更新
-
-`.github/dependabot.yml` 每周检查：
-
-- GitHub Actions 版本。
-- Docker Compose 中声明的镜像版本。
-
-Dependabot 只创建 PR，不自动合并。镜像更新应通过 CI 和本机验收后再合并。
+`git tag v*` 触发 Release 工作流，生成 SHA256SUMS（cosign 签名）和 SPDX SBOM。
