@@ -147,8 +147,8 @@ curl --resolve api.example.com:443:<CLOUDFLARE_IP> https://api.example.com
 只移除 demo，保留 `traefik` 和 `cloudflared`：
 
 ```sh
-docker compose --profile demo stop demo-api demo-test-api
-docker compose --profile demo rm -f demo-api demo-test-api
+./scripts/compose.sh --profile demo stop demo-api demo-test-api
+./scripts/compose.sh --profile demo rm -f demo-api demo-test-api
 ```
 
 清理后，如果没有其他服务接管这些域名，本地路由会返回 404。

@@ -2,8 +2,25 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export PATH="${ROOT_DIR}/.easygate/bin:$PATH"
+default_easygate_home() {
+  if [[ -n "${EASYGATE_HOME:-}" ]]; then
+    printf '%s' "$EASYGATE_HOME"
+    return
+  fi
+
+  case "$(uname -s)" in
+    Darwin) printf '%s' "${HOME}/Library/Application Support/EasyGate" ;;
+    *) printf '%s' "${XDG_DATA_HOME:-${HOME}/.local/share}/easygate" ;;
+  esac
+}
+
+EASYGATE_HOME="$(default_easygate_home)"
+export EASYGATE_HOME
+export PATH="${EASYGATE_HOME}/bin:$PATH"
 CLOUDFLARED_HOME="${EASYGATE_CLOUDFLARED_HOME:-${HOME}/.cloudflared}"
+COMPOSE_DIR="${EASYGATE_HOME}/compose"
+COMPOSE_FILE="${COMPOSE_DIR}/docker-compose.yml"
+COMPOSE_ENV="${COMPOSE_DIR}/.env"
 BASE_DOMAIN="${BASE_DOMAIN:-}"
 TUNNEL_NAME="${TUNNEL_NAME:-easygate-home}"
 DASHBOARD_HOST="${TRAEFIK_DASHBOARD_HOST:-}"
@@ -67,9 +84,20 @@ require_command() {
 }
 
 install_cloudflared() {
-  if command -v cloudflared >/dev/null 2>&1; then
-    info "已找到 cloudflared：$(command -v cloudflared)"
+  local install_dir="${EASYGATE_HOME}/bin"
+
+  if [[ -x "${install_dir}/cloudflared" ]]; then
+    info "已找到项目内 cloudflared：${install_dir}/cloudflared"
     return
+  fi
+
+  if command -v cloudflared >/dev/null 2>&1; then
+    if [[ "$INSTALL_CLOUDFLARED" != true ]]; then
+      info "已找到 cloudflared：$(command -v cloudflared)"
+      return
+    fi
+
+    info "将安装项目内最新 cloudflared，避免系统旧版本产生部署警告"
   fi
 
   if [[ "$INSTALL_CLOUDFLARED" != true ]]; then
@@ -79,11 +107,10 @@ install_cloudflared() {
 
   require_command curl || exit 1
 
-  local os arch asset url install_dir tmp_dir downloaded extracted
+  local os arch asset url tmp_dir downloaded extracted
   os="$(uname -s)"
   arch="$(uname -m)"
-  install_dir="${ROOT_DIR}/.easygate/bin"
-  tmp_dir="${ROOT_DIR}/.easygate/tmp/cloudflared"
+  tmp_dir="${EASYGATE_HOME}/tmp/cloudflared"
 
   case "$arch" in
     x86_64|amd64) arch="amd64" ;;
@@ -141,8 +168,8 @@ install_traefik() {
   local os arch asset url install_dir tmp_dir downloaded extracted
   os="$(uname -s)"
   arch="$(uname -m)"
-  install_dir="${ROOT_DIR}/.easygate/bin"
-  tmp_dir="${ROOT_DIR}/.easygate/tmp/traefik"
+  install_dir="${EASYGATE_HOME}/bin"
+  tmp_dir="${EASYGATE_HOME}/tmp/traefik"
 
   case "$arch" in
     x86_64|amd64) arch="amd64" ;;
@@ -183,6 +210,37 @@ find_latest_credentials() {
     | head -n 1
 }
 
+prepare_tunnel_credentials() {
+  local target="${EASYGATE_HOME}/cloudflared/${TUNNEL_NAME}.json"
+  local before_credentials after_credentials credentials_source credentials_tmp
+
+  if [[ -f "$target" ]]; then
+    info "复用已有 tunnel 凭据：${target}"
+    return
+  fi
+
+  before_credentials="$(find_latest_credentials "${CLOUDFLARED_HOME}" || true)"
+
+  info "创建 Cloudflare Tunnel：${TUNNEL_NAME}"
+  if ! cloudflared tunnel create "$TUNNEL_NAME"; then
+    warn "创建 tunnel 失败。若 tunnel 已存在，将尝试复用本地最新凭据文件。"
+  fi
+
+  after_credentials="$(find_latest_credentials "${CLOUDFLARED_HOME}" || true)"
+  credentials_source="${after_credentials:-$before_credentials}"
+
+  if [[ -z "$credentials_source" || ! -f "$credentials_source" ]]; then
+    error "未找到 tunnel 凭据 JSON。请确认 cloudflared tunnel create 是否成功，或将已有凭据保存为 ${target}。"
+    exit 1
+  fi
+
+  credentials_tmp="$(mktemp "${EASYGATE_HOME}/cloudflared/${TUNNEL_NAME}.json.XXXXXX")"
+  cp "$credentials_source" "$credentials_tmp"
+  chmod 600 "$credentials_tmp"
+  mv -f "$credentials_tmp" "$target"
+  info "已复制 tunnel 凭据到 ${target}"
+}
+
 find_python() {
   if command -v python3 >/dev/null 2>&1; then
     command -v python3
@@ -199,8 +257,9 @@ compose_deployment_active() {
   command -v docker >/dev/null 2>&1 || return 1
   docker compose version >/dev/null 2>&1 || return 1
   docker info >/dev/null 2>&1 || return 1
+  [[ -f "$COMPOSE_FILE" && -f "$COMPOSE_ENV" ]] || return 1
 
-  docker compose ps --services --status running 2>/dev/null \
+  docker compose -p easygate -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV" ps --services --status running 2>/dev/null \
     | grep -Eq '^(traefik|cloudflared)$'
 }
 
@@ -232,8 +291,8 @@ stop_pid_file() {
 start_process() {
   local name="$1"
   shift
-  local pid_file="${ROOT_DIR}/.easygate/run/${name}.pid"
-  local log_file="${ROOT_DIR}/.easygate/logs/${name}.log"
+  local pid_file="${EASYGATE_HOME}/run/${name}.pid"
+  local log_file="${EASYGATE_HOME}/logs/${name}.log"
 
   stop_pid_file "$pid_file"
   info "启动 ${name}"
@@ -282,18 +341,19 @@ if [[ -z "$DASHBOARD_HOST" ]]; then
   DASHBOARD_HOST="traefik.${BASE_DOMAIN}"
 fi
 
-mkdir -p .easygate/native/dynamic .easygate/run .easygate/logs cloudflared
+mkdir -p "${EASYGATE_HOME}/native/dynamic" "${EASYGATE_HOME}/run" "${EASYGATE_HOME}/logs" "${EASYGATE_HOME}/cloudflared" "${EASYGATE_HOME}/lib"
 
-cat > .env <<EOF_ENV
+cat > "${EASYGATE_HOME}/native/.env" <<EOF_ENV
 BASE_DOMAIN=${BASE_DOMAIN}
 TRAEFIK_HTTP_PORT=${TRAEFIK_HTTP_PORT}
 TRAEFIK_DASHBOARD_HOST=${DASHBOARD_HOST}
 EASYGATE_DEPLOY_MODE=native
 EASYGATE_NATIVE_API_PORT=${NATIVE_API_PORT}
 EASYGATE_NATIVE_TEST_API_PORT=${NATIVE_TEST_API_PORT}
+EASYGATE_HOME=${EASYGATE_HOME}
 EOF_ENV
 
-cat > .easygate/native/traefik.yml <<EOF_TRAEFIK
+cat > "${EASYGATE_HOME}/native/traefik.yml" <<EOF_TRAEFIK
 global:
   checkNewVersion: false
   sendAnonymousUsage: false
@@ -307,11 +367,11 @@ entryPoints:
 
 providers:
   file:
-    directory: "${ROOT_DIR}/.easygate/native/dynamic"
+    directory: "${EASYGATE_HOME}/native/dynamic"
     watch: true
 EOF_TRAEFIK
 
-cat > .easygate/native/dynamic/services.yml <<EOF_DYNAMIC
+cat > "${EASYGATE_HOME}/native/dynamic/services.yml" <<EOF_DYNAMIC
 http:
   routers:
     traefik-dashboard:
@@ -322,7 +382,7 @@ http:
 EOF_DYNAMIC
 
 if [[ "$START_DEMO" == true ]]; then
-  cat >> .easygate/native/dynamic/services.yml <<EOF_DEMO
+  cat >> "${EASYGATE_HOME}/native/dynamic/services.yml" <<EOF_DEMO
     demo-api:
       rule: Host(\`api.${BASE_DOMAIN}\`)
       entryPoints:
@@ -345,7 +405,7 @@ if [[ "$START_DEMO" == true ]]; then
           - url: http://127.0.0.1:${NATIVE_TEST_API_PORT}
 EOF_DEMO
 else
-  cat >> .easygate/native/dynamic/services.yml <<'EOF_NO_DEMO'
+  cat >> "${EASYGATE_HOME}/native/dynamic/services.yml" <<'EOF_NO_DEMO'
 
   services: {}
 EOF_NO_DEMO
@@ -360,27 +420,7 @@ if [[ "$LOCAL_ONLY" != true ]]; then
     info "已找到 cloudflared 登录凭据"
   fi
 
-  before_credentials="$(find_latest_credentials "${CLOUDFLARED_HOME}" || true)"
-
-  info "创建 Cloudflare Tunnel：${TUNNEL_NAME}"
-  if ! cloudflared tunnel create "$TUNNEL_NAME"; then
-    warn "创建 tunnel 失败。若 tunnel 已存在，将尝试复用本地最新凭据文件。"
-  fi
-
-  after_credentials="$(find_latest_credentials "${CLOUDFLARED_HOME}" || true)"
-  credentials_source="${after_credentials:-$before_credentials}"
-
-  if [[ -z "$credentials_source" || ! -f "$credentials_source" ]]; then
-    error "未找到 tunnel 凭据 JSON。请确认 cloudflared tunnel create 是否成功。"
-    exit 1
-  fi
-
-  credentials_target="cloudflared/${TUNNEL_NAME}.json"
-  credentials_tmp="$(mktemp "cloudflared/${TUNNEL_NAME}.json.XXXXXX")"
-  cp "$credentials_source" "$credentials_tmp"
-  chmod 600 "$credentials_tmp"
-  mv -f "$credentials_tmp" "$credentials_target"
-  info "已复制 tunnel 凭据到 ${credentials_target}"
+  prepare_tunnel_credentials
 
   if [[ "$ROUTE_DNS" == true ]]; then
     info "创建通配 DNS 路由：*.${BASE_DOMAIN}"
@@ -391,9 +431,9 @@ if [[ "$LOCAL_ONLY" != true ]]; then
     warn "已跳过 DNS 路由创建"
   fi
 
-  cat > cloudflared/config.native.yml <<EOF_CLOUDFLARED
+  cat > "${EASYGATE_HOME}/cloudflared/config.native.yml" <<EOF_CLOUDFLARED
 tunnel: ${TUNNEL_NAME}
-credentials-file: ${ROOT_DIR}/cloudflared/${TUNNEL_NAME}.json
+credentials-file: ${EASYGATE_HOME}/cloudflared/${TUNNEL_NAME}.json
 
 ingress:
   - hostname: "*.${BASE_DOMAIN}"
@@ -404,22 +444,24 @@ fi
 
 if [[ "$START_DEMO" == true ]]; then
   python_bin="$(find_python)" || { error "原生 demo 需要 python3 或 python"; exit 1; }
-  start_process "native-demo-api" "$python_bin" "${ROOT_DIR}/scripts/native-demo-server.py" --port "$NATIVE_API_PORT"
-  start_process "native-demo-test-api" "$python_bin" "${ROOT_DIR}/scripts/native-demo-server.py" --port "$NATIVE_TEST_API_PORT"
+  cp "${ROOT_DIR}/scripts/native-demo-server.py" "${EASYGATE_HOME}/lib/native-demo-server.py"
+  start_process "native-demo-api" "$python_bin" "${EASYGATE_HOME}/lib/native-demo-server.py" --port "$NATIVE_API_PORT"
+  start_process "native-demo-test-api" "$python_bin" "${EASYGATE_HOME}/lib/native-demo-server.py" --port "$NATIVE_TEST_API_PORT"
 fi
 
-start_process "native-traefik" "$(command -v traefik)" --configFile="${ROOT_DIR}/.easygate/native/traefik.yml"
+start_process "native-traefik" "$(command -v traefik)" --configFile="${EASYGATE_HOME}/native/traefik.yml"
 
 if [[ "$LOCAL_ONLY" != true ]]; then
-  start_process "native-cloudflared" "$(command -v cloudflared)" tunnel --config "${ROOT_DIR}/cloudflared/config.native.yml" run
+  start_process "native-cloudflared" "$(command -v cloudflared)" tunnel --config "${EASYGATE_HOME}/cloudflared/config.native.yml" run
 fi
 
 info "原生部署完成"
 printf '\n后续检查：\n'
 printf '  ./scripts/local-acceptance-native.sh\n'
-printf '  tail -f .easygate/logs/native-traefik.log\n'
+printf '  运行时目录：%s\n' "$EASYGATE_HOME"
+printf '  tail -f "%s/logs/native-traefik.log"\n' "$EASYGATE_HOME"
 if [[ "$LOCAL_ONLY" != true ]]; then
-  printf '  tail -f .easygate/logs/native-cloudflared.log\n'
+  printf '  tail -f "%s/logs/native-cloudflared.log"\n' "$EASYGATE_HOME"
   printf '  https://api.%s\n' "$BASE_DOMAIN"
   printf '  https://test-api.%s\n' "$BASE_DOMAIN"
 fi

@@ -2,6 +2,20 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+default_easygate_home() {
+  if [[ -n "${EASYGATE_HOME:-}" ]]; then
+    printf '%s' "$EASYGATE_HOME"
+    return
+  fi
+
+  case "$(uname -s)" in
+    Darwin) printf '%s' "${HOME}/Library/Application Support/EasyGate" ;;
+    *) printf '%s' "${XDG_DATA_HOME:-${HOME}/.local/share}/easygate" ;;
+  esac
+}
+
+EASYGATE_HOME="$(default_easygate_home)"
+EASYGATE_CLI="${EASYGATE_CLI:-${ROOT_DIR}/scripts/easygate}"
 STRICT="${EASYGATE_ACCEPTANCE_STRICT:-false}"
 TRAEFIK_HTTP_PORT="${TRAEFIK_HTTP_PORT:-18080}"
 ENV_BACKUP="$(mktemp "${TMPDIR:-/tmp}/easygate-native-env.XXXXXX")"
@@ -58,7 +72,7 @@ fi
 trap cleanup EXIT
 
 info "启动原生本机验收栈"
-if ! ./scripts/deploy-native.sh --domain example.com --demo --local-only; then
+if ! "$EASYGATE_CLI" native deploy --domain example.com --demo --local-only; then
   skip_or_fail "原生本机验收栈启动失败"
 fi
 
@@ -77,7 +91,7 @@ for _ in {1..30}; do
 done
 
 if [[ "$ready" != "true" ]]; then
-  tail -n 80 .easygate/logs/native-traefik.log 2>/dev/null || true
+  tail -n 80 "${EASYGATE_HOME}/logs/native-traefik.log" 2>/dev/null || true
   skip_or_fail "原生 Traefik 未在预期时间内就绪"
 fi
 

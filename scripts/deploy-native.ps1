@@ -16,7 +16,19 @@ $ErrorActionPreference = "Stop"
 
 $RootDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $RootDir
-$env:PATH = (Join-Path $RootDir ".easygate\bin") + [System.IO.Path]::PathSeparator + $env:PATH
+
+function Get-EasyGateHome {
+  if (-not [string]::IsNullOrWhiteSpace($env:EASYGATE_HOME)) {
+    return $env:EASYGATE_HOME
+  }
+  return Join-Path $env:LOCALAPPDATA "EasyGate"
+}
+
+$EasyGateHome = Get-EasyGateHome
+$ComposeFile = Join-Path $EasyGateHome "compose\docker-compose.yml"
+$ComposeEnv = Join-Path $EasyGateHome "compose\.env"
+$env:EASYGATE_HOME = $EasyGateHome
+$env:PATH = (Join-Path $EasyGateHome "bin") + [System.IO.Path]::PathSeparator + $env:PATH
 
 $TraefikVersion = if (-not [string]::IsNullOrWhiteSpace($env:EASYGATE_TRAEFIK_VERSION)) {
   $env:EASYGATE_TRAEFIK_VERSION
@@ -56,9 +68,22 @@ function Require-Command {
 }
 
 function Install-Cloudflared {
-  if (Get-Command cloudflared -ErrorAction SilentlyContinue) {
-    Write-Info "已找到 cloudflared：$((Get-Command cloudflared).Source)"
+  $InstallDir = Join-Path $EasyGateHome "bin"
+  $Target = Join-Path $InstallDir "cloudflared.exe"
+
+  if (Test-Path $Target -PathType Leaf) {
+    $env:PATH = "$InstallDir;$env:PATH"
+    Write-Info "已找到项目内 cloudflared：$Target"
     return
+  }
+
+  if (Get-Command cloudflared -ErrorAction SilentlyContinue) {
+    if ($NoInstallCloudflared) {
+      Write-Info "已找到 cloudflared：$((Get-Command cloudflared).Source)"
+      return
+    }
+
+    Write-Info "将安装项目内最新 cloudflared，避免系统旧版本产生部署警告"
   }
 
   if ($NoInstallCloudflared) {
@@ -76,12 +101,10 @@ function Install-Cloudflared {
     Fail "deploy-native.ps1 仅支持 Windows 自动安装 cloudflared；macOS/Linux 请使用 scripts/deploy-native.sh"
   }
 
-  $InstallDir = Join-Path $RootDir ".easygate\bin"
   New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
   $Asset = "cloudflared-windows-$CloudflaredArch.exe"
   $Url = "https://github.com/cloudflare/cloudflared/releases/latest/download/$Asset"
-  $Target = Join-Path $InstallDir "cloudflared.exe"
 
   Write-Info "下载 cloudflared：$Asset"
   Invoke-WebRequest -Uri $Url -OutFile $Target
@@ -113,8 +136,8 @@ function Install-Traefik {
     Fail "deploy-native.ps1 仅支持 Windows 自动安装 Traefik；macOS/Linux 请使用 scripts/deploy-native.sh"
   }
 
-  $InstallDir = Join-Path $RootDir ".easygate\bin"
-  $TmpDir = Join-Path $RootDir ".easygate\tmp\traefik"
+  $InstallDir = Join-Path $EasyGateHome "bin"
+  $TmpDir = Join-Path $EasyGateHome "tmp\traefik"
   New-Item -ItemType Directory -Force -Path $InstallDir, $TmpDir | Out-Null
 
   $Asset = "traefik_v$TraefikVersion" + "_windows_$TraefikArch.zip"
@@ -162,6 +185,37 @@ function Find-LatestCredential {
     Select-Object -First 1
 }
 
+function Prepare-TunnelCredentials {
+  $CredentialTarget = Join-Path (Join-Path $EasyGateHome "cloudflared") "$Tunnel.json"
+  if (Test-Path $CredentialTarget -PathType Leaf) {
+    Write-Info "复用已有 tunnel 凭据：$CredentialTarget"
+    return
+  }
+
+  $BeforeCredential = Find-LatestCredential $CloudflaredHome
+
+  Write-Info "创建 Cloudflare Tunnel：$Tunnel"
+  try {
+    cloudflared tunnel create $Tunnel
+  }
+  catch {
+    Write-Warn "创建 tunnel 失败。若 tunnel 已存在，将尝试复用本地最新凭据文件。"
+  }
+
+  $AfterCredential = Find-LatestCredential $CloudflaredHome
+  $CredentialSource = $AfterCredential
+  if (-not $CredentialSource) {
+    $CredentialSource = $BeforeCredential
+  }
+
+  if (-not $CredentialSource) {
+    Fail "未找到 tunnel 凭据 JSON。请确认 cloudflared tunnel create 是否成功，或将已有凭据保存为 $CredentialTarget。"
+  }
+
+  Copy-Item $CredentialSource.FullName $CredentialTarget -Force
+  Write-Info "已复制 tunnel 凭据到 $CredentialTarget"
+}
+
 function Find-Python {
   $Python3 = Get-Command python3 -ErrorAction SilentlyContinue
   if ($Python3) {
@@ -182,7 +236,10 @@ function Test-ComposeDeploymentActive {
   try {
     docker compose version | Out-Null
     docker info | Out-Null
-    $Services = docker compose ps --services --status running 2>$null
+    if (-not (Test-Path $ComposeFile) -or -not (Test-Path $ComposeEnv)) {
+      return
+    }
+    $Services = docker compose -p easygate -f $ComposeFile --env-file $ComposeEnv ps --services --status running 2>$null
   }
   catch {
     return
@@ -217,9 +274,9 @@ function Start-NativeProcess {
     [string]$FilePath,
     [string[]]$Arguments
   )
-  $PidFile = Join-Path $RootDir ".easygate\run\$Name.pid"
-  $LogFile = Join-Path $RootDir ".easygate\logs\$Name.log"
-  $ErrFile = Join-Path $RootDir ".easygate\logs\$Name.err.log"
+  $PidFile = Join-Path $EasyGateHome "run\$Name.pid"
+  $LogFile = Join-Path $EasyGateHome "logs\$Name.log"
+  $ErrFile = Join-Path $EasyGateHome "logs\$Name.err.log"
   Stop-PidFile $PidFile
   Write-Info "启动 $Name"
   $Process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -RedirectStandardOutput $LogFile -RedirectStandardError $ErrFile -PassThru -WindowStyle Hidden
@@ -244,7 +301,7 @@ if ([string]::IsNullOrWhiteSpace($Dashboard)) {
   $Dashboard = "traefik.$Domain"
 }
 
-New-Item -ItemType Directory -Force -Path ".easygate\native\dynamic", ".easygate\run", ".easygate\logs", "cloudflared" | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $EasyGateHome "native\dynamic"), (Join-Path $EasyGateHome "run"), (Join-Path $EasyGateHome "logs"), (Join-Path $EasyGateHome "cloudflared"), (Join-Path $EasyGateHome "lib") | Out-Null
 
 @(
   "BASE_DOMAIN=$Domain"
@@ -253,9 +310,10 @@ New-Item -ItemType Directory -Force -Path ".easygate\native\dynamic", ".easygate
   "EASYGATE_DEPLOY_MODE=native"
   "EASYGATE_NATIVE_API_PORT=$ApiPort"
   "EASYGATE_NATIVE_TEST_API_PORT=$TestApiPort"
-) | Set-Content -Path ".env" -Encoding UTF8
+  "EASYGATE_HOME=$EasyGateHome"
+) | Set-Content -Path (Join-Path $EasyGateHome "native\.env") -Encoding UTF8
 
-$NativeDynamicDir = (Join-Path $RootDir ".easygate\native\dynamic").Replace("\", "/")
+$NativeDynamicDir = (Join-Path $EasyGateHome "native\dynamic").Replace("\", "/")
 @(
   "global:"
   "  checkNewVersion: false"
@@ -272,7 +330,7 @@ $NativeDynamicDir = (Join-Path $RootDir ".easygate\native\dynamic").Replace("\",
   "  file:"
   "    directory: ""$NativeDynamicDir"""
   "    watch: true"
-) | Set-Content -Path ".easygate\native\traefik.yml" -Encoding UTF8
+) | Set-Content -Path (Join-Path $EasyGateHome "native\traefik.yml") -Encoding UTF8
 
 $DynamicLines = @(
   "http:"
@@ -315,7 +373,7 @@ else {
   )
 }
 
-$DynamicLines | Set-Content -Path ".easygate\native\dynamic\services.yml" -Encoding UTF8
+$DynamicLines | Set-Content -Path (Join-Path $EasyGateHome "native\dynamic\services.yml") -Encoding UTF8
 
 if (-not $LocalOnly) {
   $CertFile = Join-Path $CloudflaredHome "cert.pem"
@@ -328,29 +386,7 @@ if (-not $LocalOnly) {
     Write-Info "已找到 cloudflared 登录凭据"
   }
 
-  $BeforeCredential = Find-LatestCredential $CloudflaredHome
-
-  Write-Info "创建 Cloudflare Tunnel：$Tunnel"
-  try {
-    cloudflared tunnel create $Tunnel
-  }
-  catch {
-    Write-Warn "创建 tunnel 失败。若 tunnel 已存在，将尝试复用本地最新凭据文件。"
-  }
-
-  $AfterCredential = Find-LatestCredential $CloudflaredHome
-  $CredentialSource = $AfterCredential
-  if (-not $CredentialSource) {
-    $CredentialSource = $BeforeCredential
-  }
-
-  if (-not $CredentialSource) {
-    Fail "未找到 tunnel 凭据 JSON。请确认 cloudflared tunnel create 是否成功。"
-  }
-
-  $CredentialTarget = Join-Path "cloudflared" "$Tunnel.json"
-  Copy-Item $CredentialSource.FullName $CredentialTarget -Force
-  Write-Info "已复制 tunnel 凭据到 $CredentialTarget"
+  Prepare-TunnelCredentials
 
   if (-not $SkipRoute) {
     Write-Info "创建通配 DNS 路由：*.$Domain"
@@ -365,7 +401,7 @@ if (-not $LocalOnly) {
     Write-Warn "已跳过 DNS 路由创建"
   }
 
-  $CredentialPath = (Join-Path $RootDir "cloudflared\$Tunnel.json").Replace("\", "/")
+  $CredentialPath = (Join-Path $EasyGateHome "cloudflared\$Tunnel.json").Replace("\", "/")
   @(
     "tunnel: $Tunnel"
     "credentials-file: $CredentialPath"
@@ -374,7 +410,7 @@ if (-not $LocalOnly) {
     "  - hostname: ""*.$Domain"""
     "    service: http://127.0.0.1:$Port"
     "  - service: http_status:404"
-  ) | Set-Content -Path "cloudflared\config.native.yml" -Encoding UTF8
+  ) | Set-Content -Path (Join-Path $EasyGateHome "cloudflared\config.native.yml") -Encoding UTF8
 }
 
 if ($Demo) {
@@ -382,23 +418,29 @@ if ($Demo) {
   if (-not $Python) {
     Fail "原生 demo 需要 python3 或 python"
   }
-  Start-NativeProcess "native-demo-api" $Python @((Join-Path $RootDir "scripts\native-demo-server.py"), "--port", $ApiPort)
-  Start-NativeProcess "native-demo-test-api" $Python @((Join-Path $RootDir "scripts\native-demo-server.py"), "--port", $TestApiPort)
+  $DemoScript = Join-Path $EasyGateHome "lib\native-demo-server.py"
+  Copy-Item (Join-Path $RootDir "scripts\native-demo-server.py") $DemoScript -Force
+  Start-NativeProcess "native-demo-api" $Python @($DemoScript, "--port", $ApiPort)
+  Start-NativeProcess "native-demo-test-api" $Python @($DemoScript, "--port", $TestApiPort)
 }
 
-Start-NativeProcess "native-traefik" (Get-Command traefik).Source @("--configFile=$RootDir\.easygate\native\traefik.yml")
+$NativeTraefikConfig = Join-Path $EasyGateHome "native\traefik.yml"
+Start-NativeProcess "native-traefik" (Get-Command traefik).Source @("--configFile=$NativeTraefikConfig")
 
 if (-not $LocalOnly) {
-  Start-NativeProcess "native-cloudflared" (Get-Command cloudflared).Source @("tunnel", "--config", "$RootDir\cloudflared\config.native.yml", "run")
+  Start-NativeProcess "native-cloudflared" (Get-Command cloudflared).Source @("tunnel", "--config", (Join-Path $EasyGateHome "cloudflared\config.native.yml"), "run")
 }
 
 Write-Info "原生部署完成"
 Write-Host ""
 Write-Host "后续检查："
 Write-Host "  .\scripts\local-acceptance-native.ps1"
-Write-Host "  Get-Content .easygate\logs\native-traefik.log -Tail 80"
+Write-Host "  运行时目录：$EasyGateHome"
+$NativeTraefikLog = Join-Path $EasyGateHome "logs\native-traefik.log"
+Write-Host "  Get-Content ""$NativeTraefikLog"" -Tail 80"
 if (-not $LocalOnly) {
-  Write-Host "  Get-Content .easygate\logs\native-cloudflared.log -Tail 80"
+  $NativeCloudflaredLog = Join-Path $EasyGateHome "logs\native-cloudflared.log"
+  Write-Host "  Get-Content ""$NativeCloudflaredLog"" -Tail 80"
   Write-Host "  https://api.$Domain"
   Write-Host "  https://test-api.$Domain"
 }

@@ -11,8 +11,8 @@
 公网或本机验收完成后，推荐只移除 demo 服务：
 
 ```sh
-docker compose --profile demo stop demo-api demo-test-api
-docker compose --profile demo rm -f demo-api demo-test-api
+./scripts/compose.sh --profile demo stop demo-api demo-test-api
+./scripts/compose.sh --profile demo rm -f demo-api demo-test-api
 ```
 
 清理后 `traefik` 和 `cloudflared` 会继续运行，`api.example.com`、`test-api.example.com` 如果没有其他服务接管，会返回 404。
@@ -40,9 +40,7 @@ Windows PowerShell：
 默认清理会停止并移除 Docker Compose 创建的容器和网络，保留：
 
 - `.env`
-- `.easygate/`
-- `cloudflared/config.yml`
-- `cloudflared/*.json`
+- `EASYGATE_HOME`
 - Traefik 配置
 - Cloudflare DNS 记录
 - Cloudflare Tunnel
@@ -70,9 +68,7 @@ Windows PowerShell：
 脚本会要求输入 `yes`，然后删除：
 
 - `.env`
-- `.easygate/`
-- `cloudflared/config.yml`
-- `cloudflared/*.json`
+- `EASYGATE_HOME`
 
 ## Cloudflare 侧资源
 

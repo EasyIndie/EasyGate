@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, for example v0.1.0"
+        required: true
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  TAG_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish standalone installers
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p dist
+          cp scripts/easygate dist/easygate
+          cp scripts/easygate.ps1 dist/easygate.ps1
+          cp scripts/install.sh dist/install.sh
+          cp scripts/install.ps1 dist/install.ps1
+          chmod +x dist/easygate dist/install.sh
+          cd dist
+          shasum -a 256 easygate easygate.ps1 install.sh install.ps1 > SHA256SUMS
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG_NAME" dist/* --title "$TAG_NAME" --generate-notes

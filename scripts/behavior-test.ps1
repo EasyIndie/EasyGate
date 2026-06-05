@@ -69,7 +69,8 @@ function New-MockBin {
   @'
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$CommandArgs)
 Add-Content -Path $env:EASYGATE_MOCK_LOG -Value ("docker " + ($CommandArgs -join " "))
-if ($CommandArgs.Count -ge 5 -and $CommandArgs[0] -eq "compose" -and $CommandArgs[1] -eq "ps" -and $CommandArgs[2] -eq "--services" -and $CommandArgs[3] -eq "--status" -and $CommandArgs[4] -eq "running") {
+$CommandText = $CommandArgs -join " "
+if ($CommandText.Contains(" ps --services --status running")) {
   if ($env:EASYGATE_MOCK_COMPOSE_RUNNING -eq "true") {
     Write-Output "traefik"
     Write-Output "cloudflared"
@@ -167,20 +168,23 @@ function Invoke-ExpectedNativeFailure {
 function Test-DeployBehavior {
   $Fixture = Join-Path $TempRoot "deploy-fixture"
   $HomeDir = Join-Path $TempRoot "home"
+  $RuntimeDir = Join-Path $TempRoot "runtime-deploy"
   $BinDir = Join-Path $TempRoot "bin"
   $LogFile = Join-Path $TempRoot "commands.log"
 
   Write-Info "验证 PowerShell 部署脚本可复用已有 tunnel"
   New-Fixture $Fixture
   New-MockBin $BinDir $LogFile
+  Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $Fixture "cloudflared/config.yml"), (Join-Path $Fixture "cloudflared/easygate-home.json")
 
   New-Item -ItemType Directory -Force -Path (Join-Path $HomeDir ".cloudflared") | Out-Null
   Set-Content -Path (Join-Path $HomeDir ".cloudflared/cert.pem") -Value "cert"
   Set-Content -Path (Join-Path $HomeDir ".cloudflared/0000.json") -Value '{"source":"new"}'
-  Set-Content -Path (Join-Path $Fixture "cloudflared/easygate-home.json") -Value '{"source":"old"}'
 
   $OldCloudflaredHome = $env:EASYGATE_CLOUDFLARED_HOME
+  $OldEasyGateHome = $env:EASYGATE_HOME
   $env:EASYGATE_CLOUDFLARED_HOME = Join-Path $HomeDir ".cloudflared"
+  $env:EASYGATE_HOME = $RuntimeDir
   try {
     Invoke-WithMockPath $BinDir {
       Push-Location $Fixture
@@ -195,13 +199,20 @@ function Test-DeployBehavior {
   }
   finally {
     $env:EASYGATE_CLOUDFLARED_HOME = $OldCloudflaredHome
+    $env:EASYGATE_HOME = $OldEasyGateHome
   }
 
-  Assert-Contains (Join-Path $Fixture ".env") "BASE_DOMAIN=example.test"
-  Assert-Contains (Join-Path $Fixture "cloudflared/config.yml") 'hostname: "*.example.test"'
-  Assert-Contains (Join-Path $Fixture "cloudflared/easygate-home.json") '"source":"new"'
-  Assert-Contains $LogFile "cloudflared tunnel create easygate-home"
-  Assert-Contains $LogFile "docker compose up -d"
+  Assert-Contains (Join-Path $RuntimeDir "compose/.env") "BASE_DOMAIN=example.test"
+  Assert-Contains (Join-Path $RuntimeDir "cloudflared/config.yml") 'hostname: "*.example.test"'
+  Assert-Contains (Join-Path $RuntimeDir "cloudflared/easygate-home.json") '"source":"new"'
+  Assert-Missing (Join-Path $Fixture ".env")
+  Assert-Missing (Join-Path $Fixture "cloudflared/config.yml")
+  $CreateCalls = ([regex]::Matches((Get-Content -Raw $LogFile), "cloudflared tunnel create easygate-home")).Count
+  if ($CreateCalls -ne 1) {
+    Fail "重复部署时 tunnel create 调用次数应为 1，实际为 $CreateCalls"
+  }
+  Assert-Contains $LogFile "docker compose -p easygate"
+  Assert-Contains $LogFile " up -d"
   $ComposeCalls = ([regex]::Matches((Get-Content -Raw $LogFile), "docker compose")).Count
   if ($ComposeCalls -lt 6) {
     Fail "重复启用 -Demo 后 docker compose 调用次数不足：$ComposeCalls"
@@ -216,6 +227,7 @@ function Test-DeployBehavior {
 function Test-ComposeDeployBlocksNative {
   $Fixture = Join-Path $TempRoot "compose-blocks-native-fixture"
   $HomeDir = Join-Path $TempRoot "compose-blocks-native-home"
+  $RuntimeDir = Join-Path $TempRoot "compose-blocks-native-runtime"
   $BinDir = Join-Path $TempRoot "compose-blocks-native-bin"
   $LogFile = Join-Path $TempRoot "compose-blocks-native.log"
 
@@ -223,12 +235,14 @@ function Test-ComposeDeployBlocksNative {
   New-Fixture $Fixture
   New-MockBin $BinDir $LogFile
 
-  New-Item -ItemType Directory -Force -Path (Join-Path $HomeDir ".cloudflared"), (Join-Path $Fixture ".easygate/run") | Out-Null
+  New-Item -ItemType Directory -Force -Path (Join-Path $HomeDir ".cloudflared"), (Join-Path $RuntimeDir "run") | Out-Null
   Set-Content -Path (Join-Path $HomeDir ".cloudflared/cert.pem") -Value "cert"
-  Set-Content -Path (Join-Path $Fixture ".easygate/run/native-traefik.pid") -Value $PID
+  Set-Content -Path (Join-Path $RuntimeDir "run/native-traefik.pid") -Value $PID
 
   $OldCloudflaredHome = $env:EASYGATE_CLOUDFLARED_HOME
+  $OldEasyGateHome = $env:EASYGATE_HOME
   $env:EASYGATE_CLOUDFLARED_HOME = Join-Path $HomeDir ".cloudflared"
+  $env:EASYGATE_HOME = $RuntimeDir
   try {
     Invoke-WithMockPath $BinDir {
       Push-Location $Fixture
@@ -244,6 +258,7 @@ function Test-ComposeDeployBlocksNative {
   }
   finally {
     $env:EASYGATE_CLOUDFLARED_HOME = $OldCloudflaredHome
+    $env:EASYGATE_HOME = $OldEasyGateHome
   }
 
   $LogText = Get-Content -Raw $LogFile
@@ -254,6 +269,7 @@ function Test-ComposeDeployBlocksNative {
 
 function Test-CleanupBehavior {
   $Fixture = Join-Path $TempRoot "cleanup-fixture"
+  $RuntimeDir = Join-Path $TempRoot "cleanup-runtime"
   $BinDir = Join-Path $TempRoot "cleanup-bin"
   $LogFile = Join-Path $TempRoot "cleanup-commands.log"
 
@@ -261,68 +277,79 @@ function Test-CleanupBehavior {
   New-Fixture $Fixture
   New-MockBin $BinDir $LogFile
 
-  New-Item -ItemType Directory -Force -Path (Join-Path $Fixture ".easygate") | Out-Null
-  Set-Content -Path (Join-Path $Fixture ".env") -Value "env"
-  Set-Content -Path (Join-Path $Fixture ".easygate/tool") -Value "tool"
-  Set-Content -Path (Join-Path $Fixture "cloudflared/config.yml") -Value "config"
-  Set-Content -Path (Join-Path $Fixture "cloudflared/easygate-home.json") -Value "secret"
+  New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir "compose"), (Join-Path $RuntimeDir "cloudflared") | Out-Null
+  Set-Content -Path (Join-Path $RuntimeDir "compose/docker-compose.yml") -Value "compose"
+  Set-Content -Path (Join-Path $RuntimeDir "compose/.env") -Value "env"
+  Set-Content -Path (Join-Path $RuntimeDir "cloudflared/config.yml") -Value "config"
+  Set-Content -Path (Join-Path $RuntimeDir "cloudflared/easygate-home.json") -Value "secret"
 
   Invoke-WithMockPath $BinDir {
     Push-Location $Fixture
     try {
+      $env:EASYGATE_HOME = $RuntimeDir
       & ".\scripts\cleanup.ps1"
     }
     finally {
+      Remove-Item Env:EASYGATE_HOME -ErrorAction SilentlyContinue
       Pop-Location
     }
   }
-  Assert-File (Join-Path $Fixture ".env")
-  Assert-File (Join-Path $Fixture "cloudflared/config.yml")
-  Assert-File (Join-Path $Fixture "cloudflared/easygate-home.json")
+  Assert-File (Join-Path $RuntimeDir "compose/.env")
+  Assert-File (Join-Path $RuntimeDir "cloudflared/config.yml")
+  Assert-File (Join-Path $RuntimeDir "cloudflared/easygate-home.json")
 
   Invoke-WithMockPath $BinDir {
     Push-Location $Fixture
     try {
+      $env:EASYGATE_HOME = $RuntimeDir
       $env:EASYGATE_CONFIRM_PURGE = "no"
       & ".\scripts\cleanup.ps1" -Purge
     }
     finally {
+      Remove-Item Env:EASYGATE_HOME -ErrorAction SilentlyContinue
       Remove-Item Env:EASYGATE_CONFIRM_PURGE -ErrorAction SilentlyContinue
       Pop-Location
     }
   }
-  Assert-File (Join-Path $Fixture ".env")
-  Assert-File (Join-Path $Fixture "cloudflared/easygate-home.json")
+  Assert-File (Join-Path $RuntimeDir "compose/.env")
+  Assert-File (Join-Path $RuntimeDir "cloudflared/easygate-home.json")
 
   Invoke-WithMockPath $BinDir {
     Push-Location $Fixture
     try {
+      $env:EASYGATE_HOME = $RuntimeDir
       $env:EASYGATE_CONFIRM_PURGE = "yes"
       & ".\scripts\cleanup.ps1" -Purge
     }
     finally {
+      Remove-Item Env:EASYGATE_HOME -ErrorAction SilentlyContinue
       Remove-Item Env:EASYGATE_CONFIRM_PURGE -ErrorAction SilentlyContinue
       Pop-Location
     }
   }
+  Assert-Missing $RuntimeDir
 }
 
 function Test-NativeDeployBehavior {
   $Fixture = Join-Path $TempRoot "native-deploy-fixture"
   $HomeDir = Join-Path $TempRoot "native-home"
+  $RuntimeDir = Join-Path $TempRoot "runtime-native"
   $BinDir = Join-Path $TempRoot "native-bin"
   $LogFile = Join-Path $TempRoot "native-commands.log"
 
   Write-Info "验证 PowerShell 原生部署脚本生成 file provider 配置"
   New-Fixture $Fixture
   New-MockBin $BinDir $LogFile
+  Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $Fixture "cloudflared/config.yml"), (Join-Path $Fixture "cloudflared/easygate-home.json")
 
   New-Item -ItemType Directory -Force -Path (Join-Path $HomeDir ".cloudflared") | Out-Null
   Set-Content -Path (Join-Path $HomeDir ".cloudflared/cert.pem") -Value "cert"
   Set-Content -Path (Join-Path $HomeDir ".cloudflared/0000.json") -Value '{"source":"native"}'
 
   $OldCloudflaredHome = $env:EASYGATE_CLOUDFLARED_HOME
+  $OldEasyGateHome = $env:EASYGATE_HOME
   $env:EASYGATE_CLOUDFLARED_HOME = Join-Path $HomeDir ".cloudflared"
+  $env:EASYGATE_HOME = $RuntimeDir
   try {
     Invoke-WithMockPath $BinDir {
       Push-Location $Fixture
@@ -337,15 +364,19 @@ function Test-NativeDeployBehavior {
   }
   finally {
     $env:EASYGATE_CLOUDFLARED_HOME = $OldCloudflaredHome
+    $env:EASYGATE_HOME = $OldEasyGateHome
   }
 
-  Assert-Contains (Join-Path $Fixture ".env") "EASYGATE_DEPLOY_MODE=native"
-  Assert-Contains (Join-Path $Fixture ".easygate/native/traefik.yml") "providers:"
-  Assert-Contains (Join-Path $Fixture ".easygate/native/dynamic/services.yml") "service: api@internal"
-  Assert-Contains (Join-Path $Fixture "cloudflared/config.native.yml") "service: http://127.0.0.1:18080"
-  Assert-Contains $LogFile "cloudflared tunnel create easygate-home"
+  Assert-Contains (Join-Path $RuntimeDir "native/.env") "EASYGATE_DEPLOY_MODE=native"
+  Assert-Contains (Join-Path $RuntimeDir "native/traefik.yml") "providers:"
+  Assert-Contains (Join-Path $RuntimeDir "native/dynamic/services.yml") "service: api@internal"
+  Assert-Contains (Join-Path $RuntimeDir "cloudflared/config.native.yml") "service: http://127.0.0.1:18080"
+  $CreateCalls = ([regex]::Matches((Get-Content -Raw $LogFile), "cloudflared tunnel create easygate-home")).Count
+  if ($CreateCalls -ne 1) {
+    Fail "重复原生部署时 tunnel create 调用次数应为 1，实际为 $CreateCalls"
+  }
 
-  $TraefikText = Get-Content -Raw (Join-Path $Fixture ".easygate/native/traefik.yml")
+  $TraefikText = Get-Content -Raw (Join-Path $RuntimeDir "native/traefik.yml")
   if ($TraefikText.Contains("docker:")) {
     Fail "原生 Traefik 配置不应启用 docker provider"
   }
@@ -358,43 +389,49 @@ function Test-NativeDeployBehavior {
 
 function Test-NativeCleanupBehavior {
   $Fixture = Join-Path $TempRoot "native-cleanup-fixture"
+  $RuntimeDir = Join-Path $TempRoot "native-cleanup-runtime"
 
   Write-Info "验证 PowerShell 原生清理脚本删除范围"
   New-Fixture $Fixture
 
-  New-Item -ItemType Directory -Force -Path (Join-Path $Fixture ".easygate/native"), (Join-Path $Fixture ".easygate/run"), (Join-Path $Fixture ".easygate/logs"), (Join-Path $Fixture "cloudflared") | Out-Null
-  Set-Content -Path (Join-Path $Fixture ".easygate/native/traefik.yml") -Value "traefik"
-  Set-Content -Path (Join-Path $Fixture ".easygate/run/native-traefik.pid") -Value ""
-  Set-Content -Path (Join-Path $Fixture ".easygate/logs/native-traefik.log") -Value "log"
-  Set-Content -Path (Join-Path $Fixture "cloudflared/config.native.yml") -Value "cloudflared"
+  New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir "native"), (Join-Path $RuntimeDir "run"), (Join-Path $RuntimeDir "logs"), (Join-Path $RuntimeDir "cloudflared") | Out-Null
+  Set-Content -Path (Join-Path $RuntimeDir "native/traefik.yml") -Value "traefik"
+  Set-Content -Path (Join-Path $RuntimeDir "run/native-traefik.pid") -Value ""
+  Set-Content -Path (Join-Path $RuntimeDir "logs/native-traefik.log") -Value "log"
+  Set-Content -Path (Join-Path $RuntimeDir "cloudflared/config.native.yml") -Value "cloudflared"
 
   Push-Location $Fixture
   try {
+    $env:EASYGATE_HOME = $RuntimeDir
     & ".\scripts\cleanup-native.ps1"
   }
   finally {
+    Remove-Item Env:EASYGATE_HOME -ErrorAction SilentlyContinue
     Pop-Location
   }
-  Assert-File (Join-Path $Fixture ".easygate/native/traefik.yml")
-  Assert-File (Join-Path $Fixture "cloudflared/config.native.yml")
-  Assert-Missing (Join-Path $Fixture ".easygate/run/native-traefik.pid")
+  Assert-File (Join-Path $RuntimeDir "native/traefik.yml")
+  Assert-File (Join-Path $RuntimeDir "cloudflared/config.native.yml")
+  Assert-Missing (Join-Path $RuntimeDir "run/native-traefik.pid")
 
   Push-Location $Fixture
   try {
+    $env:EASYGATE_HOME = $RuntimeDir
     & ".\scripts\cleanup-native.ps1" -Purge
   }
   finally {
+    Remove-Item Env:EASYGATE_HOME -ErrorAction SilentlyContinue
     Pop-Location
   }
-  Assert-Missing (Join-Path $Fixture ".easygate/native")
-  Assert-Missing (Join-Path $Fixture ".easygate/run")
-  Assert-Missing (Join-Path $Fixture ".easygate/logs")
-  Assert-Missing (Join-Path $Fixture "cloudflared/config.native.yml")
+  Assert-Missing (Join-Path $RuntimeDir "native")
+  Assert-Missing (Join-Path $RuntimeDir "run")
+  Assert-Missing (Join-Path $RuntimeDir "logs")
+  Assert-Missing (Join-Path $RuntimeDir "cloudflared/config.native.yml")
 }
 
 function Test-NativeDeployBlocksCompose {
   $Fixture = Join-Path $TempRoot "native-blocks-compose-fixture"
   $HomeDir = Join-Path $TempRoot "native-blocks-compose-home"
+  $RuntimeDir = Join-Path $TempRoot "native-blocks-compose-runtime"
   $BinDir = Join-Path $TempRoot "native-blocks-compose-bin"
   $LogFile = Join-Path $TempRoot "native-blocks-compose.log"
 
@@ -402,12 +439,16 @@ function Test-NativeDeployBlocksCompose {
   New-Fixture $Fixture
   New-MockBin $BinDir $LogFile
 
-  New-Item -ItemType Directory -Force -Path (Join-Path $HomeDir ".cloudflared") | Out-Null
+  New-Item -ItemType Directory -Force -Path (Join-Path $HomeDir ".cloudflared"), (Join-Path $RuntimeDir "compose") | Out-Null
   Set-Content -Path (Join-Path $HomeDir ".cloudflared/cert.pem") -Value "cert"
+  Set-Content -Path (Join-Path $RuntimeDir "compose/docker-compose.yml") -Value "compose"
+  Set-Content -Path (Join-Path $RuntimeDir "compose/.env") -Value "env"
 
   $OldCloudflaredHome = $env:EASYGATE_CLOUDFLARED_HOME
+  $OldEasyGateHome = $env:EASYGATE_HOME
   $OldMockComposeRunning = $env:EASYGATE_MOCK_COMPOSE_RUNNING
   $env:EASYGATE_CLOUDFLARED_HOME = Join-Path $HomeDir ".cloudflared"
+  $env:EASYGATE_HOME = $RuntimeDir
   $env:EASYGATE_MOCK_COMPOSE_RUNNING = "true"
   try {
     Invoke-WithMockPath $BinDir {
@@ -424,10 +465,83 @@ function Test-NativeDeployBlocksCompose {
   }
   finally {
     $env:EASYGATE_CLOUDFLARED_HOME = $OldCloudflaredHome
+    $env:EASYGATE_HOME = $OldEasyGateHome
     $env:EASYGATE_MOCK_COMPOSE_RUNNING = $OldMockComposeRunning
   }
 
-  Assert-Missing (Join-Path $Fixture ".easygate/native/traefik.yml")
+  Assert-Missing (Join-Path $RuntimeDir "native/traefik.yml")
+}
+
+function Test-StandaloneCliBehavior {
+  $Fixture = Join-Path $TempRoot "standalone-cli-fixture"
+  $HomeDir = Join-Path $TempRoot "standalone-cli-home"
+  $RuntimeDir = Join-Path $TempRoot "standalone-cli-runtime"
+  $BinDir = Join-Path $TempRoot "standalone-cli-bin"
+  $LogFile = Join-Path $TempRoot "standalone-cli.log"
+
+  Write-Info "验证 PowerShell 独立 CLI 不依赖源码模板生成运行时配置"
+  New-Fixture $Fixture
+  New-MockBin $BinDir $LogFile
+  Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $Fixture "traefik"), (Join-Path $Fixture "cloudflared")
+
+  New-Item -ItemType Directory -Force -Path (Join-Path $HomeDir ".cloudflared") | Out-Null
+  Set-Content -Path (Join-Path $HomeDir ".cloudflared/cert.pem") -Value "cert"
+  Set-Content -Path (Join-Path $HomeDir ".cloudflared/0000.json") -Value '{"source":"standalone"}'
+
+  $OldCloudflaredHome = $env:EASYGATE_CLOUDFLARED_HOME
+  $OldEasyGateHome = $env:EASYGATE_HOME
+  $env:EASYGATE_CLOUDFLARED_HOME = Join-Path $HomeDir ".cloudflared"
+  $env:EASYGATE_HOME = $RuntimeDir
+  try {
+    Invoke-WithMockPath $BinDir {
+      Push-Location $Fixture
+      try {
+        & ".\scripts\easygate.ps1" deploy -Domain "example.test" -SkipRoute -Demo -NoInstallCloudflared
+      }
+      finally {
+        Pop-Location
+      }
+    }
+  }
+  finally {
+    $env:EASYGATE_CLOUDFLARED_HOME = $OldCloudflaredHome
+    $env:EASYGATE_HOME = $OldEasyGateHome
+  }
+
+  Assert-Contains (Join-Path $RuntimeDir "compose/.env") "BASE_DOMAIN=example.test"
+  Assert-Contains (Join-Path $RuntimeDir "traefik/traefik.yml") "providers:"
+  Assert-Contains (Join-Path $RuntimeDir "cloudflared/config.yml") 'hostname: "*.example.test"'
+  Assert-Contains (Join-Path $RuntimeDir "cloudflared/easygate-home.json") '"source":"standalone"'
+  Assert-Contains $LogFile "docker compose -p easygate"
+  Assert-Contains $LogFile " up -d"
+}
+
+function Test-StandaloneInstallBehavior {
+  $Fixture = Join-Path $TempRoot "standalone-install-fixture"
+  $RuntimeDir = Join-Path $TempRoot "standalone-install-runtime"
+
+  Write-Info "验证 PowerShell 安装器可安装后直接执行 CLI"
+  New-Fixture $Fixture
+
+  $OldEasyGateHome = $env:EASYGATE_HOME
+  $OldLocalCli = $env:EASYGATE_LOCAL_CLI
+  $env:EASYGATE_HOME = $RuntimeDir
+  $env:EASYGATE_LOCAL_CLI = Join-Path $Fixture "scripts\easygate.ps1"
+  try {
+    Push-Location $Fixture
+    try {
+      & ".\scripts\install.ps1" version | Out-Null
+    }
+    finally {
+      Pop-Location
+    }
+  }
+  finally {
+    $env:EASYGATE_HOME = $OldEasyGateHome
+    $env:EASYGATE_LOCAL_CLI = $OldLocalCli
+  }
+
+  Assert-File (Join-Path $RuntimeDir "bin/easygate.ps1")
 }
 
 try {
@@ -436,6 +550,8 @@ try {
   Test-ComposeDeployBlocksNative
   Test-NativeDeployBehavior
   Test-NativeDeployBlocksCompose
+  Test-StandaloneCliBehavior
+  Test-StandaloneInstallBehavior
   Test-CleanupBehavior
   Test-NativeCleanupBehavior
   Write-Info "PowerShell 行为测试通过"

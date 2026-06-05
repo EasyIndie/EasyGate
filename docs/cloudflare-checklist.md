@@ -103,8 +103,8 @@ curl https://test-api.example.com
 验收完成后移除 demo：
 
 ```sh
-docker compose --profile demo stop demo-api demo-test-api
-docker compose --profile demo rm -f demo-api demo-test-api
+./scripts/compose.sh --profile demo stop demo-api demo-test-api
+./scripts/compose.sh --profile demo rm -f demo-api demo-test-api
 ```
 
 ## 安全和边界

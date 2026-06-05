@@ -1,7 +1,10 @@
-COMPOSE=docker compose
+COMPOSE=./scripts/compose.sh
 LOCAL_COMPOSE=docker compose -f docker-compose.local.yml --env-file .env --profile demo
 
-.PHONY: deploy deploy-native uninstall test behavior-test local-acceptance local-acceptance-native local-up local-down local-logs up down cleanup cleanup-native purge purge-native demo config logs ps
+.PHONY: install deploy deploy-native uninstall test behavior-test local-acceptance local-acceptance-native local-up local-down local-logs up down cleanup cleanup-native purge purge-native demo config logs ps
+
+install:
+	EASYGATE_LOCAL_CLI="$(CURDIR)/scripts/easygate" ./scripts/install.sh
 
 deploy:
 	./scripts/deploy.sh

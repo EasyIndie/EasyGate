@@ -7,6 +7,15 @@ $ErrorActionPreference = "Stop"
 $RootDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $RootDir
 
+function Get-EasyGateHome {
+  if (-not [string]::IsNullOrWhiteSpace($env:EASYGATE_HOME)) {
+    return $env:EASYGATE_HOME
+  }
+  return Join-Path $env:LOCALAPPDATA "EasyGate"
+}
+
+$EasyGateHome = Get-EasyGateHome
+
 function Write-Info {
   param([string]$Message)
   Write-Host "[cleanup-native] $Message" -ForegroundColor Blue
@@ -31,20 +40,20 @@ function Stop-PidFile {
 }
 
 @(
-  ".easygate\run\native-cloudflared.pid"
-  ".easygate\run\native-traefik.pid"
-  ".easygate\run\native-demo-api.pid"
-  ".easygate\run\native-demo-test-api.pid"
+  (Join-Path $EasyGateHome "run\native-cloudflared.pid")
+  (Join-Path $EasyGateHome "run\native-traefik.pid")
+  (Join-Path $EasyGateHome "run\native-demo-api.pid")
+  (Join-Path $EasyGateHome "run\native-demo-test-api.pid")
 ) | ForEach-Object {
   Stop-PidFile $_
 }
 
 if ($Purge) {
   @(
-    ".easygate\native"
-    ".easygate\run"
-    ".easygate\logs"
-    "cloudflared\config.native.yml"
+    (Join-Path $EasyGateHome "native")
+    (Join-Path $EasyGateHome "run")
+    (Join-Path $EasyGateHome "logs")
+    (Join-Path $EasyGateHome "cloudflared\config.native.yml")
   ) | ForEach-Object {
     if (Test-Path $_) {
       Remove-Item -Recurse -Force $_

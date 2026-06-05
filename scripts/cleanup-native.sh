@@ -2,6 +2,19 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+default_easygate_home() {
+  if [[ -n "${EASYGATE_HOME:-}" ]]; then
+    printf '%s' "$EASYGATE_HOME"
+    return
+  fi
+
+  case "$(uname -s)" in
+    Darwin) printf '%s' "${HOME}/Library/Application Support/EasyGate" ;;
+    *) printf '%s' "${XDG_DATA_HOME:-${HOME}/.local/share}/easygate" ;;
+  esac
+}
+
+EASYGATE_HOME="$(default_easygate_home)"
 PURGE=false
 
 info() {
@@ -14,7 +27,7 @@ usage() {
   ./scripts/cleanup-native.sh [--purge]
 
 默认只停止原生模式进程，保留配置、日志和 tunnel 凭据。
---purge 会删除 .easygate/native、.easygate/run、.easygate/logs、cloudflared/config.native.yml。
+--purge 会删除 EASYGATE_HOME 下的 native 配置、run、logs 和 cloudflared/config.native.yml。
 EOF_USAGE
 }
 
@@ -50,16 +63,16 @@ done
 cd "$ROOT_DIR"
 
 for pid_file in \
-  .easygate/run/native-cloudflared.pid \
-  .easygate/run/native-traefik.pid \
-  .easygate/run/native-demo-api.pid \
-  .easygate/run/native-demo-test-api.pid; do
+  "${EASYGATE_HOME}/run/native-cloudflared.pid" \
+  "${EASYGATE_HOME}/run/native-traefik.pid" \
+  "${EASYGATE_HOME}/run/native-demo-api.pid" \
+  "${EASYGATE_HOME}/run/native-demo-test-api.pid"; do
   stop_pid_file "$pid_file"
 done
 
 if [[ "$PURGE" == true ]]; then
-  rm -rf .easygate/native .easygate/run .easygate/logs
-  rm -f cloudflared/config.native.yml
+  rm -rf "${EASYGATE_HOME}/native" "${EASYGATE_HOME}/run" "${EASYGATE_HOME}/logs"
+  rm -f "${EASYGATE_HOME}/cloudflared/config.native.yml"
   info "已删除原生模式本地运行配置"
 else
   info "原生模式进程已停止，配置和凭据已保留"

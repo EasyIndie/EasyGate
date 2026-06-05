@@ -26,6 +26,7 @@ info "检查关键文件"
 require_file ".env.example"
 require_file ".github/dependabot.yml"
 require_file ".github/workflows/ci.yml"
+require_file ".github/workflows/release.yml"
 require_file "docker-compose.yml"
 require_file "docker-compose.local.yml"
 require_file "traefik/traefik.yml"
@@ -50,6 +51,11 @@ require_file "scripts/behavior-test.ps1"
 require_file "scripts/cleanup-native.sh"
 require_file "scripts/cleanup-native.ps1"
 require_file "scripts/native-demo-server.py"
+require_file "scripts/compose.sh"
+require_file "scripts/easygate"
+require_file "scripts/easygate.ps1"
+require_file "scripts/install.sh"
+require_file "scripts/install.ps1"
 
 info "检查旧项目名残留"
 if grep -R "[E]asyTLS\|[e]asytls\|[E]ASYTLS" \
@@ -63,6 +69,9 @@ info "检查 Bash 脚本语法"
 bash -n scripts/test.sh
 bash -n scripts/cleanup.sh
 bash -n scripts/cleanup-native.sh
+bash -n scripts/compose.sh
+bash -n scripts/easygate
+bash -n scripts/install.sh
 bash -n scripts/deploy.sh
 bash -n scripts/deploy-native.sh
 bash -n scripts/uninstall.sh
@@ -76,6 +85,9 @@ if command -v shellcheck >/dev/null 2>&1; then
     scripts/test.sh \
     scripts/cleanup.sh \
     scripts/cleanup-native.sh \
+    scripts/compose.sh \
+    scripts/easygate \
+    scripts/install.sh \
     scripts/deploy.sh \
     scripts/deploy-native.sh \
     scripts/uninstall.sh \
@@ -101,17 +113,23 @@ grep -q "traefik.docker.network=easygate-proxy" examples/docker-service.compose.
 info "检查 cloudflared 自动安装入口"
 grep -q -- "--no-install-cloudflared" scripts/deploy.sh || fail "deploy.sh 缺少 cloudflared 自动安装开关"
 grep -q "EASYGATE_CLOUDFLARED_HOME" scripts/deploy.sh || fail "deploy.sh 缺少 cloudflared home 覆盖入口"
+grep -q "EASYGATE_HOME" scripts/deploy.sh || fail "deploy.sh 缺少 EASYGATE_HOME 运行时目录"
+grep -q "EASYGATE_HOME" scripts/easygate || fail "easygate CLI 缺少 EASYGATE_HOME 运行时目录"
+grep -q "EASYGATE_LOCAL_CLI" scripts/install.sh || fail "install.sh 缺少本地 CLI 安装测试入口"
+grep -q "EASYGATE_HOME" scripts/easygate.ps1 || fail "easygate.ps1 缺少 EASYGATE_HOME 运行时目录"
+grep -q "EASYGATE_LOCAL_CLI" scripts/install.ps1 || fail "install.ps1 缺少本地 CLI 安装测试入口"
 grep -q "EASYGATE_CLOUDFLARED_HOME" scripts/deploy.ps1 || fail "deploy.ps1 缺少 cloudflared home 覆盖入口"
 grep -q "cloudflared-linux-" scripts/deploy.sh || fail "deploy.sh 缺少 Linux cloudflared 下载逻辑"
 grep -q "cloudflared-darwin-" scripts/deploy.sh || fail "deploy.sh 缺少 macOS cloudflared 下载逻辑"
 grep -q "cloudflared-windows-" scripts/deploy.ps1 || fail "deploy.ps1 缺少 Windows cloudflared 下载逻辑"
+grep -q "cloudflared-windows-" scripts/easygate.ps1 || fail "easygate.ps1 缺少 Windows cloudflared 下载逻辑"
 
 info "检查原生模式入口"
 grep -q -- "--local-only" scripts/deploy-native.sh || fail "deploy-native.sh 缺少 local-only 验收入口"
 grep -q "traefik_v" scripts/deploy-native.sh || fail "deploy-native.sh 缺少 Traefik 下载逻辑"
 grep -q "config.native.yml" scripts/deploy-native.sh || fail "deploy-native.sh 缺少原生 cloudflared 配置"
 grep -q "providers:" scripts/deploy-native.sh || fail "deploy-native.sh 缺少原生 Traefik 配置生成"
-grep -q "deploy-native.ps1" scripts/local-acceptance-native.ps1 || fail "local-acceptance-native.ps1 未调用原生部署入口"
+grep -q "EASYGATE_CLI" scripts/local-acceptance-native.ps1 || fail "local-acceptance-native.ps1 缺少独立 CLI 覆盖入口"
 grep -q "config.native.yml" scripts/deploy-native.ps1 || fail "deploy-native.ps1 缺少原生 cloudflared 配置"
 grep -q "assert_no_native_deployment" scripts/deploy.sh || fail "deploy.sh 缺少原生模式互斥检查"
 grep -q "assert_no_compose_deployment" scripts/deploy-native.sh || fail "deploy-native.sh 缺少 Compose 模式互斥检查"
@@ -119,6 +137,7 @@ grep -q "assert_no_compose_deployment" scripts/deploy-native.sh || fail "deploy-
 info "检查 GitHub Actions Node 24 兼容配置"
 grep -q "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24" .github/workflows/ci.yml || fail "CI 缺少 Node 24 opt-in"
 grep -q "actions/checkout@v6" .github/workflows/ci.yml || fail "CI 未使用支持 Node 24 的 checkout 版本"
+grep -q "SHA256SUMS" .github/workflows/release.yml || fail "Release workflow 缺少校验和产物"
 
 info "检查文档链接文件是否存在"
 while IFS=$'\t' read -r source link; do
@@ -148,6 +167,7 @@ if command -v ruby >/dev/null 2>&1; then
     docker-compose.local.yml \
     .github/dependabot.yml \
     .github/workflows/ci.yml \
+    .github/workflows/release.yml \
     traefik/traefik.yml \
     traefik/dynamic/localhost-services.yml \
     cloudflared/config.yml.example \

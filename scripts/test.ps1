@@ -26,6 +26,7 @@ Write-Info "检查关键文件"
   ".env.example",
   ".github/dependabot.yml",
   ".github/workflows/ci.yml",
+  ".github/workflows/release.yml",
   "docker-compose.yml",
   "docker-compose.local.yml",
   "traefik/traefik.yml",
@@ -49,7 +50,12 @@ Write-Info "检查关键文件"
   "scripts/local-acceptance-native.ps1",
   "scripts/behavior-test.sh",
   "scripts/behavior-test.ps1",
-  "scripts/native-demo-server.py"
+  "scripts/native-demo-server.py",
+  "scripts/compose.sh",
+  "scripts/easygate",
+  "scripts/easygate.ps1",
+  "scripts/install.sh",
+  "scripts/install.ps1"
 ) | ForEach-Object { Require-File $_ }
 
 Write-Info "检查旧项目名残留"
@@ -63,67 +69,25 @@ if ($OldNameMatches) {
 }
 
 Write-Info "检查 PowerShell 脚本语法"
-$ParseErrors = $null
-$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/test.ps1), [ref]$ParseErrors)
-if ($ParseErrors) {
-  $ParseErrors | Format-List
-  Fail "test.ps1 存在语法错误"
-}
-
-$ParseErrors = $null
-$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/cleanup.ps1), [ref]$ParseErrors)
-if ($ParseErrors) {
-  $ParseErrors | Format-List
-  Fail "cleanup.ps1 存在语法错误"
-}
-
-$ParseErrors = $null
-$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/cleanup-native.ps1), [ref]$ParseErrors)
-if ($ParseErrors) {
-  $ParseErrors | Format-List
-  Fail "cleanup-native.ps1 存在语法错误"
-}
-
-$ParseErrors = $null
-$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/deploy.ps1), [ref]$ParseErrors)
-if ($ParseErrors) {
-  $ParseErrors | Format-List
-  Fail "deploy.ps1 存在语法错误"
-}
-
-$ParseErrors = $null
-$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/deploy-native.ps1), [ref]$ParseErrors)
-if ($ParseErrors) {
-  $ParseErrors | Format-List
-  Fail "deploy-native.ps1 存在语法错误"
-}
-
-$ParseErrors = $null
-$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/uninstall.ps1), [ref]$ParseErrors)
-if ($ParseErrors) {
-  $ParseErrors | Format-List
-  Fail "uninstall.ps1 存在语法错误"
-}
-
-$ParseErrors = $null
-$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/local-acceptance.ps1), [ref]$ParseErrors)
-if ($ParseErrors) {
-  $ParseErrors | Format-List
-  Fail "local-acceptance.ps1 存在语法错误"
-}
-
-$ParseErrors = $null
-$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/local-acceptance-native.ps1), [ref]$ParseErrors)
-if ($ParseErrors) {
-  $ParseErrors | Format-List
-  Fail "local-acceptance-native.ps1 存在语法错误"
-}
-
-$ParseErrors = $null
-$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/behavior-test.ps1), [ref]$ParseErrors)
-if ($ParseErrors) {
-  $ParseErrors | Format-List
-  Fail "behavior-test.ps1 存在语法错误"
+@(
+  "scripts/test.ps1",
+  "scripts/cleanup.ps1",
+  "scripts/cleanup-native.ps1",
+  "scripts/deploy.ps1",
+  "scripts/deploy-native.ps1",
+  "scripts/easygate.ps1",
+  "scripts/install.ps1",
+  "scripts/uninstall.ps1",
+  "scripts/local-acceptance.ps1",
+  "scripts/local-acceptance-native.ps1",
+  "scripts/behavior-test.ps1"
+) | ForEach-Object {
+  $ParseErrors = $null
+  $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw $_), [ref]$ParseErrors)
+  if ($ParseErrors) {
+    $ParseErrors | Format-List
+    Fail "$_ 存在语法错误"
+  }
 }
 
 Write-Info "检查 .env.example 默认值"
@@ -167,6 +131,10 @@ if ($ExampleText -notmatch "traefik\.docker\.network=easygate-proxy") {
 Write-Info "检查 cloudflared 自动安装入口"
 $DeploySh = Get-Content -Raw scripts/deploy.sh
 $DeployPs = Get-Content -Raw scripts/deploy.ps1
+$EasyGateSh = Get-Content -Raw scripts/easygate
+$EasyGatePs = Get-Content -Raw scripts/easygate.ps1
+$InstallSh = Get-Content -Raw scripts/install.sh
+$InstallPs = Get-Content -Raw scripts/install.ps1
 
 if ($DeploySh -notmatch "--no-install-cloudflared") {
   Fail "deploy.sh 缺少 cloudflared 自动安装开关"
@@ -174,8 +142,26 @@ if ($DeploySh -notmatch "--no-install-cloudflared") {
 if ($DeploySh -notmatch "EASYGATE_CLOUDFLARED_HOME") {
   Fail "deploy.sh 缺少 cloudflared home 覆盖入口"
 }
+if ($DeploySh -notmatch "EASYGATE_HOME") {
+  Fail "deploy.sh 缺少 EASYGATE_HOME 运行时目录"
+}
 if ($DeployPs -notmatch "EASYGATE_CLOUDFLARED_HOME") {
   Fail "deploy.ps1 缺少 cloudflared home 覆盖入口"
+}
+if ($DeployPs -notmatch "EASYGATE_HOME") {
+  Fail "deploy.ps1 缺少 EASYGATE_HOME 运行时目录"
+}
+if ($EasyGateSh -notmatch "EASYGATE_HOME") {
+  Fail "easygate CLI 缺少 EASYGATE_HOME 运行时目录"
+}
+if ($EasyGatePs -notmatch "EASYGATE_HOME") {
+  Fail "easygate.ps1 缺少 EASYGATE_HOME 运行时目录"
+}
+if ($InstallSh -notmatch "EASYGATE_LOCAL_CLI") {
+  Fail "install.sh 缺少本地 CLI 安装测试入口"
+}
+if ($InstallPs -notmatch "EASYGATE_LOCAL_CLI") {
+  Fail "install.ps1 缺少本地 CLI 安装测试入口"
 }
 if ($DeploySh -notmatch "cloudflared-linux-") {
   Fail "deploy.sh 缺少 Linux cloudflared 下载逻辑"
@@ -185,6 +171,9 @@ if ($DeploySh -notmatch "cloudflared-darwin-") {
 }
 if ($DeployPs -notmatch "cloudflared-windows-") {
   Fail "deploy.ps1 缺少 Windows cloudflared 下载逻辑"
+}
+if ($EasyGatePs -notmatch "cloudflared-windows-") {
+  Fail "easygate.ps1 缺少 Windows cloudflared 下载逻辑"
 }
 
 Write-Info "检查原生模式入口"
@@ -206,8 +195,8 @@ if ($DeployNativeSh -notmatch "providers:") {
 if ($DeployNativePs -notmatch "config.native.yml") {
   Fail "deploy-native.ps1 缺少原生 cloudflared 配置"
 }
-if ($LocalNativePs -notmatch "deploy-native.ps1") {
-  Fail "local-acceptance-native.ps1 未调用原生部署入口"
+if ($LocalNativePs -notmatch "EASYGATE_CLI") {
+  Fail "local-acceptance-native.ps1 缺少独立 CLI 覆盖入口"
 }
 if ($DeploySh -notmatch "assert_no_native_deployment") {
   Fail "deploy.sh 缺少原生模式互斥检查"
@@ -224,11 +213,15 @@ if ($DeployNativePs -notmatch "Test-ComposeDeploymentActive") {
 
 Write-Info "检查 GitHub Actions Node 24 兼容配置"
 $WorkflowText = Get-Content -Raw ".github/workflows/ci.yml"
+$ReleaseText = Get-Content -Raw ".github/workflows/release.yml"
 if ($WorkflowText -notmatch "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24") {
   Fail "CI 缺少 Node 24 opt-in"
 }
 if ($WorkflowText -notmatch "actions/checkout@v6") {
   Fail "CI 未使用支持 Node 24 的 checkout 版本"
+}
+if ($ReleaseText -notmatch "SHA256SUMS") {
+  Fail "Release workflow 缺少校验和产物"
 }
 
 Write-Info "检查文档链接文件是否存在"

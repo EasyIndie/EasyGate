@@ -3,6 +3,21 @@ $ErrorActionPreference = "Stop"
 $RootDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $RootDir
 
+function Get-EasyGateHome {
+  if (-not [string]::IsNullOrWhiteSpace($env:EASYGATE_HOME)) {
+    return $env:EASYGATE_HOME
+  }
+  return Join-Path $env:LOCALAPPDATA "EasyGate"
+}
+
+$EasyGateHome = Get-EasyGateHome
+$EasyGateCli = if (-not [string]::IsNullOrWhiteSpace($env:EASYGATE_CLI)) {
+  $env:EASYGATE_CLI
+}
+else {
+  Join-Path $RootDir "scripts\easygate.ps1"
+}
+
 $Strict = $env:EASYGATE_ACCEPTANCE_STRICT -eq "true"
 $TraefikHttpPort = if (-not [string]::IsNullOrWhiteSpace($env:TRAEFIK_HTTP_PORT)) {
   $env:TRAEFIK_HTTP_PORT
@@ -49,7 +64,7 @@ function Request-Host {
 try {
   Write-Info "启动原生本机验收栈"
   try {
-    & ".\scripts\deploy-native.ps1" -Domain "example.com" -Demo -LocalOnly
+    & $EasyGateCli native deploy -Domain "example.com" -Demo -LocalOnly
   }
   catch {
     Skip-Or-Fail "原生本机验收栈启动失败"
@@ -74,8 +89,9 @@ try {
   }
 
   if (-not $Ready) {
-    if (Test-Path ".easygate\logs\native-traefik.log") {
-      Get-Content ".easygate\logs\native-traefik.log" -Tail 80
+    $TraefikLog = Join-Path $EasyGateHome "logs\native-traefik.log"
+    if (Test-Path $TraefikLog) {
+      Get-Content $TraefikLog -Tail 80
     }
     Skip-Or-Fail "原生 Traefik 未在预期时间内就绪"
   }
@@ -107,7 +123,7 @@ try {
   Write-Info "原生本机路由验收通过"
 }
 finally {
-  & ".\scripts\cleanup-native.ps1" | Out-Null
+  & $EasyGateCli native cleanup | Out-Null
   if ($HadEnv) {
     Copy-Item $EnvBackup ".env" -Force
   }

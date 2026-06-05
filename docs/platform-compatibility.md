@@ -10,19 +10,19 @@ EasyGate 的 Docker Compose 项目可以兼容：
 
 推荐部署方式：
 
-- macOS：Docker Desktop + 一键部署脚本
-- Linux：Docker Engine + Docker Compose 插件 + 一键部署脚本
-- Windows 11：Docker Desktop + WSL2 后端 + PowerShell 一键部署脚本
+- macOS：Docker Desktop + standalone CLI
+- Linux：Docker Engine + Docker Compose 插件 + standalone CLI
+- Windows 11：Docker Desktop + WSL2 后端 + PowerShell standalone CLI
 
 不能使用 Docker 时，三类平台都可以使用原生部署脚本：
 
-- macOS / Linux：`./scripts/deploy-native.sh --domain example.com`
-- Windows 11：`.\scripts\deploy-native.ps1 -Domain example.com`
+- macOS / Linux：`easygate native deploy --domain example.com`
+- Windows 11：`%LOCALAPPDATA%\EasyGate\bin\easygate.ps1 native deploy -Domain example.com`
 
 Tunnel 创建步骤见 `docs/create-cloudflare-tunnel.md`。
 
-EasyGate 不会自动安装 Docker 或 Docker Compose。部署脚本会在缺少 `cloudflared` CLI 时自动下载到 `.easygate/bin/`。
-原生部署脚本还会在缺少 Traefik CLI 时自动下载到 `.easygate/bin/`。
+EasyGate 不会自动安装 Docker 或 Docker Compose。部署脚本会在缺少 `cloudflared` CLI 时自动下载到 `EASYGATE_HOME/bin`。
+原生部署脚本还会在缺少 Traefik CLI 时自动下载到 `EASYGATE_HOME/bin`。
 
 ## macOS
 
@@ -35,7 +35,7 @@ EasyGate 不会自动安装 Docker 或 Docker Compose。部署脚本会在缺少
 运行：
 
 ```sh
-make up
+curl -fsSL https://raw.githubusercontent.com/EasyIndie/EasyGate/main/scripts/install.sh | bash -s -- deploy --domain example.com
 ```
 
 ## Linux
@@ -49,7 +49,7 @@ make up
 运行：
 
 ```sh
-make up
+curl -fsSL https://raw.githubusercontent.com/EasyIndie/EasyGate/main/scripts/install.sh | bash -s -- deploy --domain example.com
 ```
 
 如果使用普通用户运行 Docker，需要确保当前用户有权限访问 Docker daemon。
@@ -65,7 +65,7 @@ make up
 运行：
 
 ```powershell
-docker compose up -d
+iwr -UseBasicParsing https://raw.githubusercontent.com/EasyIndie/EasyGate/main/scripts/install.ps1 -OutFile $env:TEMP\easygate-install.ps1; powershell -ExecutionPolicy Bypass -File $env:TEMP\easygate-install.ps1 deploy -Domain example.com
 ```
 
 如果 PowerShell 阻止脚本执行，可以在当前会话中临时允许：
@@ -78,7 +78,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 也可以在 WSL2 发行版中使用 Linux 方式运行：
 
 ```sh
-make up
+curl -fsSL https://raw.githubusercontent.com/EasyIndie/EasyGate/main/scripts/install.sh | bash -s -- deploy --domain example.com
 ```
 
 ## Windows 11 注意事项

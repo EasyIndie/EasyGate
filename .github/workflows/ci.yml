@@ -26,6 +26,19 @@ jobs:
       - name: Run tests
         run: make test
 
+      - name: Install standalone CLI
+        env:
+          EASYGATE_HOME: ${{ runner.temp }}/easygate-standalone
+          EASYGATE_LOCAL_CLI: ${{ github.workspace }}/scripts/easygate
+        run: ./scripts/install.sh
+
+      - name: Check standalone CLI
+        env:
+          EASYGATE_HOME: ${{ runner.temp }}/easygate-standalone
+        run: |
+          "$EASYGATE_HOME/bin/easygate" version
+          "$EASYGATE_HOME/bin/easygate" home
+
       - name: Run local acceptance
         env:
           EASYGATE_ACCEPTANCE_STRICT: ${{ matrix.os == 'ubuntu-latest' && 'true' || 'false' }}
@@ -34,6 +47,8 @@ jobs:
       - name: Run native local acceptance
         env:
           EASYGATE_ACCEPTANCE_STRICT: ${{ matrix.os == 'ubuntu-latest' && 'true' || 'false' }}
+          EASYGATE_HOME: ${{ runner.temp }}/easygate-standalone
+          EASYGATE_CLI: ${{ runner.temp }}/easygate-standalone/bin/easygate
         run: ./scripts/local-acceptance-native.sh
 
   windows:
@@ -57,6 +72,21 @@ jobs:
             exit $ExitCode
           }
 
+      - name: Install standalone PowerShell CLI
+        shell: pwsh
+        env:
+          EASYGATE_HOME: ${{ runner.temp }}\easygate-standalone
+          EASYGATE_LOCAL_CLI: ${{ github.workspace }}\scripts\easygate.ps1
+        run: .\scripts\install.ps1
+
+      - name: Check standalone PowerShell CLI
+        shell: pwsh
+        env:
+          EASYGATE_HOME: ${{ runner.temp }}\easygate-standalone
+        run: |
+          & "$env:EASYGATE_HOME\bin\easygate.ps1" version
+          & "$env:EASYGATE_HOME\bin\easygate.ps1" home
+
       - name: Run local acceptance
         shell: pwsh
         env:
@@ -67,4 +97,6 @@ jobs:
         shell: pwsh
         env:
           EASYGATE_ACCEPTANCE_STRICT: "false"
+          EASYGATE_HOME: ${{ runner.temp }}\easygate-standalone
+          EASYGATE_CLI: ${{ runner.temp }}\easygate-standalone\bin\easygate.ps1
         run: .\scripts\local-acceptance-native.ps1

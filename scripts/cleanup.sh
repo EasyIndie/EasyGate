@@ -2,6 +2,21 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+default_easygate_home() {
+  if [[ -n "${EASYGATE_HOME:-}" ]]; then
+    printf '%s' "$EASYGATE_HOME"
+    return
+  fi
+
+  case "$(uname -s)" in
+    Darwin) printf '%s' "${HOME}/Library/Application Support/EasyGate" ;;
+    *) printf '%s' "${XDG_DATA_HOME:-${HOME}/.local/share}/easygate" ;;
+  esac
+}
+
+EASYGATE_HOME="$(default_easygate_home)"
+COMPOSE_FILE="${EASYGATE_HOME}/compose/docker-compose.yml"
+COMPOSE_ENV="${EASYGATE_HOME}/compose/.env"
 PURGE=false
 
 info() {
@@ -20,7 +35,7 @@ usage() {
   cat <<'EOF_USAGE'
 用法：
   ./scripts/cleanup.sh          停止并移除 EasyGate 容器和网络
-  ./scripts/cleanup.sh --purge  同时删除本地生成的 .env、.easygate/、cloudflared/config.yml 和 tunnel 凭据
+  ./scripts/cleanup.sh --purge  同时删除 EASYGATE_HOME 运行时目录
 EOF_USAGE
 }
 
@@ -54,14 +69,18 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 
 info "停止并移除 EasyGate 容器和网络"
-docker compose down --remove-orphans
+if [[ -f "$COMPOSE_FILE" && -f "$COMPOSE_ENV" ]]; then
+  docker compose -p easygate -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV" down --remove-orphans
+else
+  warn "未找到运行时 Compose 配置：${COMPOSE_FILE}，跳过 docker compose down"
+fi
 
 if [[ "$PURGE" != true ]]; then
   info "清理完成。本地配置和 tunnel 凭据已保留。"
   exit 0
 fi
 
-warn "即将删除本地生成配置和 tunnel 凭据。该操作不会删除 Cloudflare 上的 DNS 记录或 tunnel。"
+warn "即将删除运行时目录 ${EASYGATE_HOME}，包括本地配置、二进制和 tunnel 凭据。该操作不会删除 Cloudflare 上的 DNS 记录或 tunnel。"
 confirm="${EASYGATE_CONFIRM_PURGE:-}"
 if [[ -z "$confirm" ]]; then
   read -r -p "确认继续？输入 yes: " confirm
@@ -71,22 +90,9 @@ if [[ "$confirm" != "yes" ]]; then
   exit 0
 fi
 
-paths=(
-  ".env"
-  ".easygate"
-  "cloudflared/config.yml"
-)
-
-for path in "${paths[@]}"; do
-  if [[ -e "$path" ]]; then
-    rm -rf "$path"
-    info "已删除 $path"
-  fi
-done
-
-if compgen -G "cloudflared/*.json" >/dev/null; then
-  rm -f cloudflared/*.json
-  info "已删除 cloudflared/*.json"
+if [[ -e "$EASYGATE_HOME" ]]; then
+  rm -rf "$EASYGATE_HOME"
+  info "已删除 ${EASYGATE_HOME}"
 fi
 
 info "彻底清理完成。Cloudflare 侧资源如需删除，请使用 cloudflared CLI 或 Cloudflare Dashboard 手动处理。"

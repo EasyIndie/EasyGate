@@ -152,8 +152,8 @@ cdn.example.com
 ## 验证
 
 ```sh
-docker compose ps
-docker compose logs -f cloudflared traefik
+make ps
+make logs
 ```
 
 启动 demo：
