@@ -1,5 +1,6 @@
-[CmdletBinding(PositionalBinding=$false)]
 param(
+  [Parameter(ValueFromRemainingArguments = $true)]
+  [string[]]$CommandArgs,
   [string]$Domain,
   [string]$Tunnel,
   [string]$Dashboard,
@@ -13,11 +14,6 @@ param(
   [switch]$NoInstallTraefik,
   [switch]$Purge
 )
-
-# Use $args for undeclared positional arguments (e.g. "deploy", "cleanup").
-# Avoids ValueFromRemainingArguments which triggers PowerShell common
-# parameter binding issues on PS 7 (e.g. -d consumed as -Debug).
-$CommandArgs = @($args)
 
 $ErrorActionPreference = "Stop"
 $Version = if ([string]::IsNullOrWhiteSpace($env:EASYGATE_VERSION)) { "dev" } else { $env:EASYGATE_VERSION }

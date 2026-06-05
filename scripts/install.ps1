@@ -1,5 +1,6 @@
-[CmdletBinding(PositionalBinding=$false)]
 param(
+  [Parameter(ValueFromRemainingArguments = $true)]
+  [string[]]$CommandArgs,
   [string]$Domain,
   [string]$Tunnel,
   [string]$Dashboard,
@@ -13,10 +14,6 @@ param(
   [switch]$NoInstallTraefik,
   [switch]$Purge
 )
-
-# Use $args for undeclared positional arguments to avoid
-# ValueFromRemainingArguments + common parameter binding issues.
-$CommandArgs = @($args)
 
 $ErrorActionPreference = "Stop"
 
