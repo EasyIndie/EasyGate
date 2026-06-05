@@ -186,6 +186,7 @@ function Invoke-EasyGateCompose {
   & docker compose -p easygate -f $ComposeFile --env-file $ComposeEnv @args
 }
 
+
 function Write-RuntimeComposeFile {
   $TraefikConfig = (Join-Path $EasyGateHome "traefik\traefik.yml").Replace("\", "/")
   $TraefikDynamic = (Join-Path $EasyGateHome "traefik\dynamic").Replace("\", "/")
@@ -214,9 +215,20 @@ function Write-RuntimeComposeFile {
     "      - traefik.http.routers.traefik-dashboard.rule=Host(``$Dashboard``)"
     "      - traefik.http.routers.traefik-dashboard.entrypoints=web"
     "      - traefik.http.routers.traefik-dashboard.service=api@internal"
+    "    read_only: true"
+    "    cap_drop:"
+    "      - ALL"
+    "    cap_add:"
+    "      - NET_BIND_SERVICE"
+    "    deploy:"
+    "      resources:"
+    "        limits:"
+    "          memory: 128M"
+    "        reservations:"
+    "          memory: 32M"
     ""
     "  cloudflared:"
-    "    image: cloudflare/cloudflared:latest"
+    "    image: cloudflare/cloudflared:2025.2.1"
     "    container_name: easygate-cloudflared"
     "    restart: unless-stopped"
     "    command: tunnel --config /etc/cloudflared/config.yml run"
@@ -226,6 +238,15 @@ function Write-RuntimeComposeFile {
     "      - ""${CloudflaredDir}:/etc/cloudflared:ro"""
     "    depends_on:"
     "      - traefik"
+    "    read_only: true"
+    "    cap_drop:"
+    "      - ALL"
+    "    deploy:"
+    "      resources:"
+    "        limits:"
+    "          memory: 64M"
+    "        reservations:"
+    "          memory: 16M"
     ""
     "  demo-api:"
     "    image: traefik/whoami:v1.10"
@@ -239,6 +260,15 @@ function Write-RuntimeComposeFile {
     "      - traefik.http.routers.demo-api.rule=Host(``api.$Domain``)"
     "      - traefik.http.routers.demo-api.entrypoints=web"
     "      - traefik.http.services.demo-api.loadbalancer.server.port=80"
+    "    read_only: true"
+    "    cap_drop:"
+    "      - ALL"
+    "    deploy:"
+    "      resources:"
+    "        limits:"
+    "          memory: 32M"
+    "        reservations:"
+    "          memory: 8M"
     ""
     "  demo-test-api:"
     "    image: traefik/whoami:v1.10"
@@ -252,6 +282,15 @@ function Write-RuntimeComposeFile {
     "      - traefik.http.routers.demo-test-api.rule=Host(``test-api.$Domain``)"
     "      - traefik.http.routers.demo-test-api.entrypoints=web"
     "      - traefik.http.services.demo-test-api.loadbalancer.server.port=80"
+    "    read_only: true"
+    "    cap_drop:"
+    "      - ALL"
+    "    deploy:"
+    "      resources:"
+    "        limits:"
+    "          memory: 32M"
+    "        reservations:"
+    "          memory: 8M"
     ""
     "networks:"
     "  easygate-proxy:"
@@ -259,6 +298,7 @@ function Write-RuntimeComposeFile {
   ) | Set-Content -Path $ComposeFile -Encoding UTF8
 }
 
+Test-NativeDeploymentActive
 Test-NativeDeploymentActive
 Require-Command "docker"
 Install-Cloudflared

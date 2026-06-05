@@ -57,6 +57,17 @@ services:
       - traefik.http.routers.traefik-dashboard.rule=Host(\`\${TRAEFIK_DASHBOARD_HOST}\`)
       - traefik.http.routers.traefik-dashboard.entrypoints=web
       - traefik.http.routers.traefik-dashboard.service=api@internal
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 32M
 
   cloudflared:
     image: ${CLOUDFLARED_IMAGE}
@@ -69,6 +80,15 @@ services:
       - "${EASYGATE_HOME}/cloudflared:/etc/cloudflared:ro"
     depends_on:
       - traefik
+    read_only: true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+        reservations:
+          memory: 16M
 
   demo-api:
     image: traefik/whoami:v1.10
@@ -82,6 +102,15 @@ services:
       - traefik.http.routers.demo-api.rule=Host(\`api.\${BASE_DOMAIN}\`)
       - traefik.http.routers.demo-api.entrypoints=web
       - traefik.http.services.demo-api.loadbalancer.server.port=80
+    read_only: true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+        reservations:
+          memory: 8M
 
   demo-test-api:
     image: traefik/whoami:v1.10
@@ -95,6 +124,15 @@ services:
       - traefik.http.routers.demo-test-api.rule=Host(\`test-api.\${BASE_DOMAIN}\`)
       - traefik.http.routers.demo-test-api.entrypoints=web
       - traefik.http.services.demo-test-api.loadbalancer.server.port=80
+    read_only: true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+        reservations:
+          memory: 8M
 
 networks:
   easygate-proxy:
