@@ -35,6 +35,9 @@ function Assert-Contains {
   )
   $Content = Get-Content -Raw $Path
   if (-not $Content.Contains($Text)) {
+    Write-Host "[DEBUG] 日志文件内容 (${Path}):" -ForegroundColor Yellow
+    Write-Host $Content -ForegroundColor Yellow
+    Write-Host "[DEBUG] 查找文本: ${Text}" -ForegroundColor Yellow
     Fail "$Path 未包含：$Text"
   }
 }
@@ -67,8 +70,14 @@ function New-MockBin {
   }
 
   @"
+`$ErrorActionPreference = "Stop"
 `$CommandArgs = `$args
-Add-Content -Path "$LogFile" -Value ("docker " + (`$CommandArgs -join " "))
+try {
+  Add-Content -Path "$LogFile" -Value ("docker " + (`$CommandArgs -join " ")) -ErrorAction Stop
+} catch {
+  Write-Error "[docker.mock] Add-Content failed: `$_"
+  exit 1
+}
 `$CommandText = `$CommandArgs -join " "
 if (`$CommandText.Contains(" ps --services --status running")) {
   if (`$env:EASYGATE_MOCK_COMPOSE_RUNNING -eq "true") {
@@ -80,8 +89,14 @@ exit 0
 "@ | Set-Content -Path $DockerScript -Encoding UTF8
 
   @"
+`$ErrorActionPreference = "Stop"
 `$CommandArgs = `$args
-Add-Content -Path "$LogFile" -Value ("cloudflared " + (`$CommandArgs -join " "))
+try {
+  Add-Content -Path "$LogFile" -Value ("cloudflared " + (`$CommandArgs -join " ")) -ErrorAction Stop
+} catch {
+  Write-Error "[cloudflared.mock] Add-Content failed: `$_"
+  exit 1
+}
 if (`$CommandArgs.Count -ge 2 -and `$CommandArgs[0] -eq "tunnel" -and `$CommandArgs[1] -eq "create") {
   exit 1
 }
@@ -89,8 +104,14 @@ exit 0
 "@ | Set-Content -Path $CloudflaredScript -Encoding UTF8
 
   @"
+`$ErrorActionPreference = "Stop"
 `$CommandArgs = `$args
-Add-Content -Path "$LogFile" -Value ("traefik " + (`$CommandArgs -join " "))
+try {
+  Add-Content -Path "$LogFile" -Value ("traefik " + (`$CommandArgs -join " ")) -ErrorAction Stop
+} catch {
+  Write-Error "[traefik.mock] Add-Content failed: `$_"
+  exit 1
+}
 exit 0
 "@ | Set-Content -Path $TraefikScript -Encoding UTF8
 
