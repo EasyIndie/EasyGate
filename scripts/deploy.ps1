@@ -181,8 +181,9 @@ function Test-NativeDeploymentActive {
 }
 
 function Invoke-EasyGateCompose {
-  param([Parameter(ValueFromRemainingArguments = $true)][string[]]$CommandArgs)
-  & docker compose -p easygate -f $ComposeFile --env-file $ComposeEnv @CommandArgs
+  # Use $args directly to avoid PowerShell consuming flags like -d as
+  # common parameters (e.g. -Debug) when ValueFromRemainingArguments is used.
+  & docker compose -p easygate -f $ComposeFile --env-file $ComposeEnv @args
 }
 
 function Write-RuntimeComposeFile {
