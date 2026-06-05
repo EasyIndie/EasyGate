@@ -66,10 +66,11 @@ detect_rc_file() {
 
 add_to_path() {
   local rc_file="$1"
-  # 直接写入绝对路径，不含变量引用，简单可靠
-  local export_line="export PATH=\"${INSTALL_DIR}:\$PATH\""
+  # 路径中可能含空格（如 macOS 的 Application Support），
+  # 路径部分用单引号防止 shell 解释，$PATH 保留双引号。
+  local export_line="export PATH='${INSTALL_DIR}':\"\$PATH\""
 
-  # 如果已经配置过则跳过（检查不同形式避免重复）
+  # 如果已经配置过则跳过
   if grep -qs "${INSTALL_DIR}" "$rc_file" 2>/dev/null; then
     return 0
   fi
