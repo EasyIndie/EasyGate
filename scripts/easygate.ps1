@@ -860,7 +860,15 @@ function Stop-NativeServices {
 }
 
 function Invoke-Uninstall {
-  # Stop services if any are running
+  # Stop native services (traefik + cloudflared)
+  Stop-NativeServices
+  # Stop demo services
+  Stop-NativeDemo
+  # Kill any leftover demo Python processes
+  Get-Process -Name "python3","python" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -match "native-demo-server" } |
+    Stop-Process -Force -ErrorAction SilentlyContinue
+  # Stop compose containers
   if ((Test-Path $ComposeFile) -and (Test-Path $ComposeEnv) -and (Get-Command docker -ErrorAction SilentlyContinue)) {
     try { Invoke-EasyGateCompose down --remove-orphans } catch { }
   }

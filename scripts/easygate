@@ -1525,6 +1525,8 @@ case "$cmd" in
   uninstall)
     # 停止所有服务（compose + native + nohup 进程）
     stop_services 2>/dev/null || true
+    # 显式清理 demo 服务（nohup 进程）
+    stop_native_demo 2>/dev/null || true
     # 停掉所有可能的 nohup 进程（兜底，防止 PID 文件残留）
     for pid_file in \
       "${EASYGATE_HOME}/run/native-cloudflared.pid" \
@@ -1533,6 +1535,8 @@ case "$cmd" in
       "${EASYGATE_HOME}/run/native-demo-test-api.pid"; do
       stop_pid_file "$pid_file"
     done
+    # 兜底：kill 残留的 demo Python 进程
+    pkill -f "native-demo-server.py" 2>/dev/null || true
     # 停掉 compose 容器（如果 docker 可用）
     if command -v docker >/dev/null 2>&1 && [[ -f "$COMPOSE_FILE" ]]; then
       compose down --remove-orphans >/dev/null 2>&1 || true
