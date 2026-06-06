@@ -22,7 +22,7 @@ make lint               # ShellCheck（需安装 shellcheck）
 - **cloudflared 版本固定**：三个文件中均为 `2025.2.1`
 - **install.sh 自包含**：禁止 `source lib.sh` 或 `BASH_SOURCE`
 - **安全加固**：`deploy.sh`/`deploy.ps1` 生成模板含 `read_only` + `cap_drop`
-- **Demo 专用 compose 命令不含 `--profile`**
+- **compose down 含 `--profile demo`**（确保 demo 容器也清理）
 - 原生模式入口、CI 配置、文档链接有效性
 - YAML 语法 + Docker Compose 配置可渲染
 
@@ -39,7 +39,7 @@ Mock 二进制（docker、cloudflared、traefik）隔离真实环境，不需要
 | `--demo` | demo 正常启动 |
 | 清理保留配置 | stop 不删配置和凭据 |
 | 清理 uninstall | uninstall 删除全部数据 + 清理 PATH |
-| 清理命令检查 | compose 命令不含 `--profile` |
+| 清理命令检查 | compose down 含 `--profile demo` 清理 demo 容器 |
 | 原生部署 | file provider 配置 + 进程启动 |
 | 模式互斥 | compose 和 native 双向阻止 |
 | 独立 CLI | CLI 不依赖源码仓库 |
@@ -73,10 +73,10 @@ make local-acceptance-native    # 原生模式
 
 GitHub Actions 在 push、PR 和每周 cron 运行，三平台矩阵：
 
-| 平台 | Shell | 严格 | 超时 | 失败上传日志 |
-|------|-------|------|------|-------------|
-| ubuntu-latest | Bash | ✅ | 15 min | ✅ |
-| macos-latest | Bash | ❌ | 15 min | ✅ |
-| windows-latest | PowerShell | ❌ | 15 min | — |
+| 平台 | Shell | 严格 | 超时 | 备注 |
+|------|-------|------|------|------|
+| ubuntu-latest | Bash | ✅ | 15 min | Docker + 原生双验收 |
+| macos-latest | Bash | ❌ | 15 min | Docker + 原生双验收 |
+| windows-latest | PowerShell | ❌ | 15 min | 跳过 Docker 验收，仅原生验收 |
 
 Release 工作流：`git tag v*` → 打包 CLI + 校验和嵌入 + cosign 签名 + SPDX SBOM。

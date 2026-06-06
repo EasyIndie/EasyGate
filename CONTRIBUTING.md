@@ -57,6 +57,7 @@ scripts/
   behavior-test.sh/.ps1 ← Mock-based behaviour tests
   local-acceptance.sh/.ps1 ← Docker routing tests
   local-acceptance-native.sh/.ps1 ← Native routing tests
+  service-helper.py   ← Service YAML helper
 docs/                 ← Detailed documentation
 .github/workflows/    ← CI and Release pipelines
 ```

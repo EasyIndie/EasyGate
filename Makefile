@@ -29,6 +29,7 @@ help:
 	@echo "  easygate deploy --native --domain <domain>"
 	@echo "  easygate start / stop / restart"
 	@echo "  easygate demo start / stop / restart"
+	@echo "  easygate service add / remove / list"
 	@echo "  easygate ps / logs / config / uninstall"
 	@echo ""
 

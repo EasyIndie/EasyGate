@@ -94,6 +94,13 @@ easygate config             # 查看配置
 easygate demo start         # 启动 demo 测试服务
 easygate demo stop          # 停止 demo
 easygate demo restart       # 重启 demo
+easygate service add \      # 添加自定义服务
+  --name my-app \
+  --host app.example.com \
+  --url http://192.168.1.100:3000
+easygate service list       # 列出所有服务
+easygate service remove my-app  # 删除服务
+easygate version            # 查看版本
 easygate uninstall          # 停止服务 + 删除全部数据 + 清理 PATH
 ```
 

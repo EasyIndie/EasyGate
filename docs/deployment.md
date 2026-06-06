@@ -69,15 +69,17 @@ easygate deploy --native --domain example.com --demo --local-only
 
 ## 服务管理
 
+所有命令自动检测部署模式：
+
 ```sh
 easygate start          # 启动服务
 easygate stop           # 停止服务（保留配置和凭据）
 easygate restart        # 重启服务
-easygate ps             # 查看状态（compose: 容器状态 / native: PID 列表）
+easygate ps             # 查看状态
 easygate logs           # 查看日志
 easygate config         # 查看配置
-easygate home           # 显示 ~/.easygate 路径
 easygate version        # 显示版本号
+easygate home           # 显示运行时目录路径
 ```
 
 ## Demo 服务
@@ -93,6 +95,18 @@ easygate demo restart   # 重启 demo
 部署后访问 `https://api.example.com` 和 `https://test-api.example.com`，预期看到 `traefik/whoami` 返回的 `Hostname:`、`IP:` 等信息。
 
 ## 接入服务
+
+### 自定义服务（推荐）
+
+使用 `easygate service` 命令，自动检测部署模式：
+
+```sh
+easygate service add --name my-app --host app.example.com --url http://192.168.1.100:8080
+easygate service list
+easygate service remove my-app
+```
+
+配置即时生效，Traefik 自动热加载。
 
 ### Docker 服务
 
@@ -118,7 +132,7 @@ networks:
 
 完整示例见 `examples/docker-service.compose.yml`。
 
-### 非 Docker 服务
+### 非 Docker 服务（手动配置）
 
 编辑 `~/.easygate/traefik/dynamic/localhost-services.yml`（Docker 模式）或 `~/.easygate/native/dynamic/services.yml`（原生模式）：
 
@@ -166,11 +180,12 @@ easygate uninstall         # 停止服务 + 删除全部数据 + 清理 shell PA
 ```
 ~/.easygate/
 ├── bin/              CLI 和运行时二进制
+├── lib/              辅助脚本（service-helper.py 等）
 ├── compose/          运行时 Docker Compose 配置
-├── native/           原生模式 Traefik 配置
+├── native/           原生模式 Traefik 配置与动态服务
 ├── cloudflared/     Tunnel 凭据和配置
 ├── run/              PID 文件
-├── logs/             日志
+├── logs/             日志（自动轮转，单文件上限 10MB）
 └── traefik/          Docker 模式 Traefik 配置
 ```
 
