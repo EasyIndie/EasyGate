@@ -46,7 +46,7 @@ fi
 
 info "停止并移除 EasyGate 容器和网络"
 if [[ -f "$COMPOSE_FILE" && -f "$COMPOSE_ENV" ]]; then
-  docker compose -p easygate -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV" down --remove-orphans
+  docker compose -p easygate -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV" --profile demo down --remove-orphans
 else
   warn "未找到运行时 Compose 配置：${COMPOSE_FILE}，跳过 docker compose down"
 fi

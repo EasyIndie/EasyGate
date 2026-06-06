@@ -48,7 +48,7 @@ catch {
 
 Write-Info "停止并移除 EasyGate 容器和网络"
 if ((Test-Path $ComposeFile) -and (Test-Path $ComposeEnv)) {
-  docker compose -p easygate -f $ComposeFile --env-file $ComposeEnv down --remove-orphans
+  docker compose -p easygate -f $ComposeFile --env-file $ComposeEnv --profile demo down --remove-orphans
 }
 else {
   Write-Warn "未找到运行时 Compose 配置：$ComposeFile，跳过 docker compose down"

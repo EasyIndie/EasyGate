@@ -381,7 +381,7 @@ run_cleanup_command_behavior_test() {
   local log="${TMP_DIR}/cleanup-cmd-commands.log"
   local runtime="${TMP_DIR}/cleanup-cmd-runtime"
 
-  info "验证 cleanup compose down 命令不含 --profile（防止只停 demo 服务）"
+  info "验证 cleanup compose down 包含 --profile demo（确保 demo 容器也清理）"
   make_fixture "$fixture"
   make_mock_bin "$bin" "$log"
 
@@ -394,9 +394,7 @@ run_cleanup_command_behavior_test() {
     cd "$fixture"
     EASYGATE_HOME="$runtime" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" bash scripts/cleanup.sh
   )
-  if grep -Fq -- "--profile" "$log"; then
-    fail "cleanup.sh 的 compose down 不应包含 --profile（否则只停 demo）"
-  fi
+  assert_contains "$log" "--profile demo"
   assert_contains "$log" "down --remove-orphans"
 }
 

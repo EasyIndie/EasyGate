@@ -870,7 +870,7 @@ function Invoke-Uninstall {
     Stop-Process -Force -ErrorAction SilentlyContinue
   # Stop compose containers
   if ((Test-Path $ComposeFile) -and (Test-Path $ComposeEnv) -and (Get-Command docker -ErrorAction SilentlyContinue)) {
-    try { Invoke-EasyGateCompose down --remove-orphans } catch { }
+    try { Invoke-EasyGateCompose --profile demo down --remove-orphans } catch { }
   }
   # Delete all local data
   if (Test-Path $EasyGateHome) {

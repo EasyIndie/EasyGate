@@ -1537,9 +1537,9 @@ case "$cmd" in
     done
     # 兜底：kill 残留的 demo Python 进程
     pkill -f "native-demo-server.py" 2>/dev/null || true
-    # 停掉 compose 容器（如果 docker 可用）
+    # 停掉 compose 容器（含 demo profile，确保 demo 容器也清理）
     if command -v docker >/dev/null 2>&1 && [[ -f "$COMPOSE_FILE" ]]; then
-      compose down --remove-orphans >/dev/null 2>&1 || true
+      compose --profile demo down --remove-orphans >/dev/null 2>&1 || true
     fi
     # 注销并清理系统服务
     unregister_native_services 2>/dev/null || true
