@@ -10,8 +10,6 @@ if ($CommandArgs.Count -eq 0) {
 $Command = $CommandArgs[0]
 $Rest = if ($CommandArgs.Count -gt 1) { $CommandArgs[1..($CommandArgs.Count - 1)] } else { @() }
 
-# 调试：在 CI 中输出收到的参数
-Write-Host "[easygate] DEBUG args count=$($args.Count) cmd=$Command rest=$($Rest -join '|')"
 
 $ErrorActionPreference = "Stop"
 $Version = if ([string]::IsNullOrWhiteSpace($env:EASYGATE_VERSION)) { "dev" } else { $env:EASYGATE_VERSION }
