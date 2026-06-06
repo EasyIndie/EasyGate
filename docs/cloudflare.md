@@ -52,7 +52,7 @@ cloudflared tunnel create easygate-home
 凭据 JSON 保存在 `~/.cloudflared/<tunnel-id>.json`。将其复制到 `EASYGATE_HOME/cloudflared/`：
 
 ```sh
-cp ~/.cloudflared/<tunnel-id>.json ~/.local/share/easygate/cloudflared/easygate-home.json
+cp ~/.cloudflared/<tunnel-id>.json ~/.easygate/cloudflared/easygate-home.json
 ```
 
 ### 3. 创建 DNS 路由
