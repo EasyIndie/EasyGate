@@ -695,6 +695,28 @@ EOF_CONFIG
   printf '  https://test-api.%s\n' "$base_domain"
 }
 
+# Check if a TCP port is already in use on localhost.
+# Returns 0 if the port is free, 1 if occupied.
+check_port_available() {
+  local port="$1"
+  local label="${2:-port}"
+  # Try lsof first (macOS/Linux), fall back to ss (Linux), then /dev/tcp
+  if command -v lsof >/dev/null 2>&1; then
+    if lsof -i "tcp:${port}" -P -n 2>/dev/null | grep -q LISTEN; then
+      local proc
+      proc="$(lsof -i "tcp:${port}" -P -n 2>/dev/null | awk 'NR>1{print $1; exit}')"
+      error "${label} ${port} 已被占用（${proc}），请先停止该进程再部署"
+      return 1
+    fi
+  elif command -v ss >/dev/null 2>&1; then
+    if ss -tlnp "sport = :${port}" 2>/dev/null | grep -q LISTEN; then
+      error "${label} ${port} 已被占用，请先停止该进程再部署"
+      return 1
+    fi
+  fi
+  return 0
+}
+
 find_python() {
   if command -v python3 >/dev/null 2>&1; then command -v python3; return; fi
   if command -v python >/dev/null 2>&1; then command -v python; return; fi
@@ -955,6 +977,9 @@ EOF_CLOUDFLARED
     start_process "native-demo-test-api" "$python_bin" "${EASYGATE_HOME}/lib/native-demo-server.py" --port "$native_test_api_port"
     _started_pids+=("${EASYGATE_HOME}/run/native-demo-test-api.pid")
   fi
+
+  # 检查端口是否已被占用（如手动启动的 Traefik 实例）
+  check_port_available "$traefik_http_port" "Traefik 端口" || exit 1
 
   start_process "native-traefik" "$(command -v traefik)" --configFile="${EASYGATE_HOME}/native/traefik.yml"
   _started_pids+=("${EASYGATE_HOME}/run/native-traefik.pid")

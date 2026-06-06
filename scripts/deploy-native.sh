@@ -199,6 +199,8 @@ if [[ "$START_DEMO" == true ]]; then
   start_process "native-demo-test-api" "$python_bin" "${EASYGATE_HOME}/lib/native-demo-server.py" --port "$NATIVE_TEST_API_PORT"
 fi
 
+check_port_available "$TRAEFIK_HTTP_PORT" "Traefik 端口" || exit 1
+
 start_process "native-traefik" "$(command -v traefik)" --configFile="${EASYGATE_HOME}/native/traefik.yml"
 
 if [[ "$LOCAL_ONLY" != true ]]; then

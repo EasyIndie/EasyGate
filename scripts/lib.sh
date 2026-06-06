@@ -487,6 +487,29 @@ unregister_launchd() {
   rm -f "$plist"
 }
 
+# ── Port conflict detection ──────────────────────────────────────────
+
+# Check if a TCP port is already in use on localhost.
+# Returns 0 if the port is free, 1 if occupied.
+check_port_available() {
+  local port="$1"
+  local label="${2:-port}"
+  if command -v lsof >/dev/null 2>&1; then
+    if lsof -i "tcp:${port}" -P -n 2>/dev/null | grep -q LISTEN; then
+      local proc
+      proc="$(lsof -i "tcp:${port}" -P -n 2>/dev/null | awk 'NR>1{print $1; exit}')"
+      error "${label} ${port} 已被占用（${proc}），请先停止该进程再部署"
+      return 1
+    fi
+  elif command -v ss >/dev/null 2>&1; then
+    if ss -tlnp "sport = :${port}" 2>/dev/null | grep -q LISTEN; then
+      error "${label} ${port} 已被占用，请先停止该进程再部署"
+      return 1
+    fi
+  fi
+  return 0
+}
+
 # Validate a domain name (basic sanity check).
 validate_domain() {
   local domain="$1"
