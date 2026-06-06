@@ -712,7 +712,7 @@ EOF_CONFIG
   fi
 
   write_mode_file "compose"
-  register_logrotate_timer
+  register_logrotate_timer 2>/dev/null || true
 
   info "部署完成"
   printf '\n后续检查：\n'
@@ -1077,7 +1077,7 @@ EOF_CLOUDFLARED
   trap - INT TERM
 
   write_mode_file "native"
-  register_logrotate_timer
+  register_logrotate_timer 2>/dev/null || true
 
   info "原生部署完成"
   printf '\n后续检查：\n'
@@ -1187,6 +1187,7 @@ register_logrotate_timer() {
   case "$(uname -s)" in
     Darwin)
       local plist="${HOME}/Library/LaunchAgents/com.easygate.logrotate.plist"
+      mkdir -p "${HOME}/Library/LaunchAgents"
       cat > "$plist" <<'EOF_PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
