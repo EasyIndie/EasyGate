@@ -64,5 +64,5 @@ docs/                 ← Detailed documentation
 
 ## Release process
 
-Maintainers: push a `v*` tag (e.g. `v0.2.0`) to trigger the release workflow.
+Maintainers: push a semver tag (e.g. `0.2.0`) to trigger the release workflow.
 Release notes are auto-generated from commit history by GitHub.

@@ -79,4 +79,4 @@ GitHub Actions 在 push、PR 和每周 cron 运行，三平台矩阵：
 | macos-latest | Bash | ❌ | 15 min | Docker + 原生双验收 |
 | windows-latest | PowerShell | ❌ | 15 min | 跳过 Docker 验收，仅原生验收 |
 
-Release 工作流：`git tag v*` → 打包 CLI + 校验和嵌入 + cosign 签名 + SPDX SBOM。
+Release 工作流：`git tag <semver>`（如 `0.0.1`）→ 打包 CLI + 校验和嵌入 + cosign 签名 + SPDX SBOM。
