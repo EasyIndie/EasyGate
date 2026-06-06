@@ -560,6 +560,7 @@ run_deploy_mode_file_test() {
   touch "${home_dir}/.cloudflared/cert.pem"
   echo '{"source":"mode-file"}' > "${home_dir}/.cloudflared/0000.json"
 
+  EASYGATE_MOCK_LOG="$log_file" \
   EASYGATE_CI=true \
   EASYGATE_CLOUDFLARED_HOME="${home_dir}/.cloudflared" \
   EASYGATE_HOME="$runtime_dir" \
@@ -586,6 +587,7 @@ run_cloudflared_config_test() {
   touch "${home_dir}/.cloudflared/cert.pem"
   echo '{"source":"cf-config"}' > "${home_dir}/.cloudflared/0000.json"
 
+  EASYGATE_MOCK_LOG="$log_file" \
   EASYGATE_CI=true \
   EASYGATE_CLOUDFLARED_HOME="${home_dir}/.cloudflared" \
   EASYGATE_HOME="$runtime_dir" \
@@ -613,6 +615,7 @@ run_native_cloudflared_config_test() {
   touch "${home_dir}/.cloudflared/cert.pem"
   echo '{"source":"native-cf"}' > "${home_dir}/.cloudflared/0000.json"
 
+  EASYGATE_MOCK_LOG="$log_file" \
   EASYGATE_CI=true \
   EASYGATE_CLOUDFLARED_HOME="${home_dir}/.cloudflared" \
   EASYGATE_HOME="$runtime_dir" \
@@ -666,6 +669,7 @@ run_ps_shows_all_services_test() {
   echo '{"source":"ps-all"}' > "${home_dir}/.cloudflared/0000.json"
 
   # Deploy with --demo to generate demo service config
+  EASYGATE_MOCK_LOG="$log_file" \
   EASYGATE_CI=true \
   EASYGATE_CLOUDFLARED_HOME="${home_dir}/.cloudflared" \
   EASYGATE_HOME="$runtime_dir" \
