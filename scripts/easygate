@@ -1107,6 +1107,34 @@ start_native_services() {
 }
 
 stop_native_services() {
+  # 通过服务管理器停止进程（保留注册，start 可恢复）
+  case "$(uname -s)" in
+    Linux)
+      if command -v systemctl >/dev/null 2>&1; then
+        systemctl --user stop "easygate-traefik.service" "easygate-cloudflared.service" >/dev/null 2>&1 || true
+        return
+      fi
+      ;;
+    Darwin)
+      if command -v launchctl >/dev/null 2>&1; then
+        launchctl stop "com.easygate.native-traefik" >/dev/null 2>&1 || true
+        launchctl stop "com.easygate.native-cloudflared" >/dev/null 2>&1 || true
+        return
+      fi
+      ;;
+  esac
+  # Fallback: kill PIDs（无 systemd/launchctl 时）
+  for pid_file in \
+    "${EASYGATE_HOME}/run/native-cloudflared.pid" \
+    "${EASYGATE_HOME}/run/native-traefik.pid" \
+    "${EASYGATE_HOME}/run/native-demo-api.pid" \
+    "${EASYGATE_HOME}/run/native-demo-test-api.pid"; do
+    stop_pid_file "$pid_file"
+  done
+}
+
+# 注销系统服务（purge/uninstall 时调用，彻底清除注册）
+unregister_native_services() {
   case "$(uname -s)" in
     Linux)
       unregister_systemd "native-traefik" || true
@@ -1117,13 +1145,6 @@ stop_native_services() {
       unregister_launchd "native-cloudflared" || true
       ;;
   esac
-  for pid_file in \
-    "${EASYGATE_HOME}/run/native-cloudflared.pid" \
-    "${EASYGATE_HOME}/run/native-traefik.pid" \
-    "${EASYGATE_HOME}/run/native-demo-api.pid" \
-    "${EASYGATE_HOME}/run/native-demo-test-api.pid"; do
-    stop_pid_file "$pid_file"
-  done
 }
 
 purge_services() {
@@ -1143,7 +1164,10 @@ purge_services() {
         docker compose -p easygate -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV" down --remove-orphans >/dev/null 2>&1 || true
       fi
       ;;
-    native) stop_native_services ;;
+    native)
+      stop_native_services
+      unregister_native_services
+      ;;
   esac
 
   if [[ -e "$EASYGATE_HOME" ]]; then
@@ -1211,6 +1235,7 @@ case "$cmd" in
   version|--version) printf 'easygate %s\n' "$VERSION" ;;
   uninstall)
     stop_services 2>/dev/null || true
+    unregister_native_services 2>/dev/null || true
     for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"; do
       [[ -f "$rc" ]] || continue
       if grep -qs "${EASYGATE_HOME}/bin" "$rc" 2>/dev/null; then
