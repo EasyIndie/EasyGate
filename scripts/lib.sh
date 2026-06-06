@@ -528,6 +528,8 @@ check_process_started() {
   local pid_file="${EASYGATE_HOME}/run/${name}.pid"
   local log_file="${EASYGATE_HOME}/logs/${name}.log"
   local pid
+  # CI/测试环境跳过进程存活检查（mock 二进制启动后立即退出）
+  [[ "${EASYGATE_CI:-}" == "true" ]] && return 0
   sleep 1
   pid="$(cat "$pid_file" 2>/dev/null || true)"
   if [[ -z "$pid" ]] || ! kill -0 "$pid" >/dev/null 2>&1; then

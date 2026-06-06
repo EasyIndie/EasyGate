@@ -734,17 +734,12 @@ check_process_started() {
   local pid_file="${EASYGATE_HOME}/run/${name}.pid"
   local log_file="${EASYGATE_HOME}/logs/${name}.log"
   local pid
-
+  [[ "${EASYGATE_CI:-}" == "true" ]] && return 0
   sleep 1
-
   pid="$(cat "$pid_file" 2>/dev/null || true)"
   if [[ -z "$pid" ]] || ! kill -0 "$pid" >/dev/null 2>&1; then
     error "${name} 启动失败！日志（${log_file}）："
-    if [[ -f "$log_file" ]]; then
-      tail -n 20 "$log_file" >&2
-    else
-      error "日志文件不存在"
-    fi
+    if [[ -f "$log_file" ]]; then tail -n 20 "$log_file" >&2; else error "日志文件不存在"; fi
     return 1
   fi
   return 0
