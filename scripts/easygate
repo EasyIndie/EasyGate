@@ -690,6 +690,7 @@ EOF_ENV
 tunnel: ${tunnel_name}
 credentials-file: /etc/cloudflared/${tunnel_name}.json
 ha-connections: 2
+loglevel: warn
 
 ingress:
   - hostname: "*.${base_domain}"
@@ -1012,6 +1013,7 @@ EOF_DEMO
 tunnel: ${tunnel_name}
 credentials-file: ${EASYGATE_HOME}/cloudflared/${tunnel_name}.json
 ha-connections: 2
+loglevel: warn
 
 ingress:
   - hostname: "*.${base_domain}"

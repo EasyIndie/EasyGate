@@ -266,6 +266,7 @@ cat > "${EASYGATE_HOME}/cloudflared/config.yml" <<EOF_CONFIG
 tunnel: ${TUNNEL_NAME}
 credentials-file: /etc/cloudflared/${TUNNEL_NAME}.json
 ha-connections: 2
+loglevel: warn
 
 ingress:
   - hostname: "*.${BASE_DOMAIN}"

@@ -183,6 +183,7 @@ if [[ "$LOCAL_ONLY" != true ]]; then
 tunnel: ${TUNNEL_NAME}
 credentials-file: ${EASYGATE_HOME}/cloudflared/${TUNNEL_NAME}.json
 ha-connections: 2
+loglevel: warn
 
 ingress:
   - hostname: "*.${BASE_DOMAIN}"
