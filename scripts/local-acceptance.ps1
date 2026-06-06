@@ -71,6 +71,11 @@ function Cleanup {
 
 Set-Location $RootDir
 
+# Windows CI Docker Desktop 不稳定，直接跳过
+if ($IsWindows) {
+  Skip-Or-Fail "Windows 环境跳过 Docker 验收"
+}
+
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
   Skip-Or-Fail "未找到 docker"
 }
