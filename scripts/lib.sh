@@ -378,6 +378,115 @@ validate_port() {
   return 0
 }
 
+# ── System service registration (for reboot persistence) ────────────
+
+# Register a systemd user service (Linux)
+register_systemd() {
+  local name="$1"       # e.g. "native-traefik"
+  local bin_path="$2"   # absolute path to binary
+  local args="$3"       # command arguments as a single string
+  local description="${4:-EasyGate ${name}}"
+  local after="${5:-network.target}"
+  local unit_dir="${HOME}/.config/systemd/user"
+  local unit_file="${unit_dir}/${name}.service"
+
+  command -v systemctl >/dev/null 2>&1 || return 0
+
+  mkdir -p "$unit_dir"
+  # 先注销已有服务确保幂等
+  systemctl --user disable "${name}.service" >/dev/null 2>&1 || true
+  rm -f "$unit_file"
+
+  cat > "$unit_file" <<EOF_SERVICE
+[Unit]
+Description=${description}
+After=${after}
+
+[Service]
+Type=simple
+ExecStart=${bin_path} ${args}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF_SERVICE
+
+  systemctl --user daemon-reload >/dev/null 2>&1 || true
+  systemctl --user enable --now "${name}.service" >/dev/null 2>&1 || true
+}
+
+# Unregister a systemd user service (Linux)
+unregister_systemd() {
+  local name="$1"
+  local unit_file="${HOME}/.config/systemd/user/${name}.service"
+
+  command -v systemctl >/dev/null 2>&1 || return 0
+
+  systemctl --user disable "${name}.service" >/dev/null 2>&1 || true
+  systemctl --user stop "${name}.service" >/dev/null 2>&1 || true
+  rm -f "$unit_file"
+  systemctl --user daemon-reload >/dev/null 2>&1 || true
+}
+
+# Register a launchd user agent (macOS)
+register_launchd() {
+  local name="$1"
+  local bin_path="$2"
+  local args="$3"
+  local plist="${HOME}/Library/LaunchAgents/com.easygate.${name}.plist"
+  local log_file="${EASYGATE_HOME}/logs/${name}.log"
+
+  command -v launchctl >/dev/null 2>&1 || return 0
+
+  mkdir -p "${HOME}/Library/LaunchAgents"
+  # 先注销避免重复
+  launchctl unload "$plist" >/dev/null 2>&1 || true
+  rm -f "$plist"
+
+  cat > "$plist" <<EOF_PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.easygate.${name}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${bin_path}</string>
+EOF_PLIST
+  # 参数逐行写入 array
+  for _arg in ${args}; do
+    printf '        <string>%s</string>\n' "$_arg" >> "$plist"
+  done
+  cat >> "$plist" <<EOF_PLIST
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>${log_file}</string>
+    <key>StandardErrorPath</key>
+    <string>${log_file}</string>
+</dict>
+</plist>
+EOF_PLIST
+
+  launchctl load "$plist" >/dev/null 2>&1 || true
+}
+
+# Unregister a launchd user agent (macOS)
+unregister_launchd() {
+  local name="$1"
+  local plist="${HOME}/Library/LaunchAgents/com.easygate.${name}.plist"
+
+  command -v launchctl >/dev/null 2>&1 || return 0
+
+  launchctl unload "$plist" >/dev/null 2>&1 || true
+  rm -f "$plist"
+}
+
 # Validate a domain name (basic sanity check).
 validate_domain() {
   local domain="$1"

@@ -28,6 +28,18 @@ done
 
 cd "$ROOT_DIR"
 
+# 注销系统服务（如有已注册的）
+case "$(uname -s)" in
+  Linux)
+    unregister_systemd "native-traefik" || true
+    unregister_systemd "native-cloudflared" || true
+    ;;
+  Darwin)
+    unregister_launchd "native-traefik" || true
+    unregister_launchd "native-cloudflared" || true
+    ;;
+esac
+
 for pid_file in \
   "${EASYGATE_HOME}/run/native-cloudflared.pid" \
   "${EASYGATE_HOME}/run/native-traefik.pid" \

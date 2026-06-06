@@ -205,6 +205,28 @@ if [[ "$LOCAL_ONLY" != true ]]; then
   start_process "native-cloudflared" "$(command -v cloudflared)" tunnel --config "${EASYGATE_HOME}/cloudflared/config.native.yml" run
 fi
 
+# Register system services for auto-restart on reboot.
+case "$(uname -s)" in
+  Linux)
+    register_systemd "native-traefik" "$(command -v traefik)" \
+      "--configFile=${EASYGATE_HOME}/native/traefik.yml" \
+      "EasyGate Traefik" "network.target"
+    if [[ "$LOCAL_ONLY" != true ]]; then
+      register_systemd "native-cloudflared" "$(command -v cloudflared)" \
+        "tunnel --config ${EASYGATE_HOME}/cloudflared/config.native.yml run" \
+        "EasyGate Cloudflared Tunnel" "network.target"
+    fi
+    ;;
+  Darwin)
+    register_launchd "native-traefik" "$(command -v traefik)" \
+      "--configFile=${EASYGATE_HOME}/native/traefik.yml"
+    if [[ "$LOCAL_ONLY" != true ]]; then
+      register_launchd "native-cloudflared" "$(command -v cloudflared)" \
+        "tunnel --config ${EASYGATE_HOME}/cloudflared/config.native.yml run"
+    fi
+    ;;
+esac
+
 info "原生部署完成"
 printf '\n后续检查：\n'
 printf '  ./scripts/local-acceptance-native.sh\n'

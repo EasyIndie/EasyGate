@@ -81,6 +81,91 @@ require_command() {
   fi
 }
 
+# ── System service registration (for reboot persistence) ────────────
+
+register_systemd() {
+  local name="$1" bin_path="$2" args="$3"
+  local description="${4:-EasyGate ${name}}" after="${5:-network.target}"
+  local unit_dir="${HOME}/.config/systemd/user"
+  local unit_file="${unit_dir}/${name}.service"
+  command -v systemctl >/dev/null 2>&1 || return 0
+  mkdir -p "$unit_dir"
+  systemctl --user disable "${name}.service" >/dev/null 2>&1 || true
+  rm -f "$unit_file"
+  cat > "$unit_file" <<EOF_SERVICE
+[Unit]
+Description=${description}
+After=${after}
+
+[Service]
+Type=simple
+ExecStart=${bin_path} ${args}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF_SERVICE
+  systemctl --user daemon-reload >/dev/null 2>&1 || true
+  systemctl --user enable --now "${name}.service" >/dev/null 2>&1 || true
+}
+
+unregister_systemd() {
+  local name="$1"
+  local unit_file="${HOME}/.config/systemd/user/${name}.service"
+  command -v systemctl >/dev/null 2>&1 || return 0
+  systemctl --user disable "${name}.service" >/dev/null 2>&1 || true
+  systemctl --user stop "${name}.service" >/dev/null 2>&1 || true
+  rm -f "$unit_file"
+  systemctl --user daemon-reload >/dev/null 2>&1 || true
+}
+
+register_launchd() {
+  local name="$1" bin_path="$2" args="$3"
+  local plist="${HOME}/Library/LaunchAgents/com.easygate.${name}.plist"
+  local log_file="${EASYGATE_HOME}/logs/${name}.log"
+  command -v launchctl >/dev/null 2>&1 || return 0
+  mkdir -p "${HOME}/Library/LaunchAgents"
+  launchctl unload "$plist" >/dev/null 2>&1 || true
+  rm -f "$plist"
+  cat > "$plist" <<EOF_PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.easygate.${name}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${bin_path}</string>
+EOF_PLIST
+  for _arg in ${args}; do
+    printf '        <string>%s</string>\n' "$_arg" >> "$plist"
+  done
+  cat >> "$plist" <<EOF_PLIST
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>${log_file}</string>
+    <key>StandardErrorPath</key>
+    <string>${log_file}</string>
+</dict>
+</plist>
+EOF_PLIST
+  launchctl load "$plist" >/dev/null 2>&1 || true
+}
+
+unregister_launchd() {
+  local name="$1"
+  local plist="${HOME}/Library/LaunchAgents/com.easygate.${name}.plist"
+  command -v launchctl >/dev/null 2>&1 || return 0
+  launchctl unload "$plist" >/dev/null 2>&1 || true
+  rm -f "$plist"
+}
+
 validate_port() {
   local port="$1"
   local label="${2:-port}"
@@ -881,6 +966,28 @@ EOF_CLOUDFLARED
   # Deployment completed successfully — disarm interrupt trap.
   trap - INT TERM
 
+  # Register system services for auto-restart on reboot.
+  case "$(uname -s)" in
+    Linux)
+      register_systemd "native-traefik" "$(command -v traefik)" \
+        "--configFile=${EASYGATE_HOME}/native/traefik.yml" \
+        "EasyGate Traefik" "network.target"
+      if [[ "$local_only" != true ]]; then
+        register_systemd "native-cloudflared" "$(command -v cloudflared)" \
+          "tunnel --config ${EASYGATE_HOME}/cloudflared/config.native.yml run" \
+          "EasyGate Cloudflared Tunnel" "network.target"
+      fi
+      ;;
+    Darwin)
+      register_launchd "native-traefik" "$(command -v traefik)" \
+        "--configFile=${EASYGATE_HOME}/native/traefik.yml"
+      if [[ "$local_only" != true ]]; then
+        register_launchd "native-cloudflared" "$(command -v cloudflared)" \
+          "tunnel --config ${EASYGATE_HOME}/cloudflared/config.native.yml run"
+      fi
+      ;;
+  esac
+
   info "原生部署完成"
   printf '\n后续检查：\n'
   printf '  easygate native logs\n'
@@ -933,6 +1040,18 @@ cleanup_native() {
     esac
     shift
   done
+
+  # Unregister system services first.
+  case "$(uname -s)" in
+    Linux)
+      unregister_systemd "native-traefik"
+      unregister_systemd "native-cloudflared"
+      ;;
+    Darwin)
+      unregister_launchd "native-traefik"
+      unregister_launchd "native-cloudflared"
+      ;;
+  esac
 
   for pid_file in \
     "${EASYGATE_HOME}/run/native-cloudflared.pid" \
