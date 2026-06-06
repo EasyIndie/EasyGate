@@ -22,7 +22,7 @@ make lint               # ShellCheck（需安装 shellcheck）
 - **cloudflared 版本固定**：三个文件中均为 `2025.2.1`
 - **install.sh 自包含**：禁止 `source lib.sh` 或 `BASH_SOURCE`
 - **安全加固**：`deploy.sh`/`deploy.ps1` 生成模板含 `read_only` + `cap_drop`
-- **--profile 回归检测**：PS cleanup 不含 `--profile`
+- **Demo 专用 compose 命令不含 `--profile`**
 - 原生模式入口、CI 配置、文档链接有效性
 - YAML 语法 + Docker Compose 配置可渲染
 

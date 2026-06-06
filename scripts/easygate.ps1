@@ -59,10 +59,11 @@ function Show-Usage {
 用法：
   easygate.ps1 deploy -Domain <domain> [选项]
   easygate.ps1 native deploy -Domain <domain> [选项]
-  easygate.ps1 cleanup [-Purge]
-  easygate.ps1 native cleanup [-Purge]
-  easygate.ps1 ps|logs|config|up|down|demo [cleanup]
-  easygate.ps1 home|version
+  easygate.ps1 start|stop|restart      服务管理
+  easygate.ps1 ps|logs|config          状态与日志
+  easygate.ps1 demo start|stop|restart Demo 服务
+  easygate.ps1 uninstall               卸载
+  easygate.ps1 home|version            信息查询
 
 常用选项：
   -Domain <domain>       主域名，例如 example.com
