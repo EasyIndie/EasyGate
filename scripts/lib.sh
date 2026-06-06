@@ -247,13 +247,10 @@ prepare_tunnel_credentials() {
   if [[ -f "$target" ]]; then
     info "复用已有 tunnel 凭据：${target}"
     # 验证凭据仍然有效（tunnel 未被删除或凭据未过期）
-    if ! cloudflared tunnel info "$tunnel_name" >/dev/null 2>&1; then
-      warn "tunnel ${tunnel_name} 凭据已失效，将重新创建"
-      cloudflared tunnel delete "$tunnel_name" >/dev/null 2>&1 || true
-      rm -f "$target"
-    else
-      return
-    fi
+    cloudflared tunnel info "$tunnel_name" >/dev/null 2>&1 && return || true
+    warn "tunnel ${tunnel_name} 凭据已失效，将重新创建"
+    cloudflared tunnel delete "$tunnel_name" >/dev/null 2>&1 || true
+    rm -f "$target"
   fi
 
   before_credentials="$(find_latest_credentials "${CLOUDFLARED_HOME}" || true)"
