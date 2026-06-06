@@ -40,9 +40,9 @@ install:
 
 deploy:
 	@if [ "$(NATIVE)" = "1" ]; then \
-		./scripts/deploy-native.sh; \
+		easygate deploy --native $(filter-out NATIVE=1,$(MAKECMDGOALS)); \
 	else \
-		./scripts/deploy.sh; \
+		easygate deploy $(filter-out NATIVE=1,$(MAKECMDGOALS)); \
 	fi
 
 uninstall:

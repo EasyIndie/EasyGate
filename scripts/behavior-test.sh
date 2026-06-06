@@ -107,12 +107,12 @@ run_deploy_behavior_test() {
   (
     cd "$fixture"
     HOME="$home" EASYGATE_HOME="$runtime" EASYGATE_CLOUDFLARED_HOME="${home}/.cloudflared" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" \
-      bash scripts/deploy.sh --domain example.test --skip-route --demo --no-install-cloudflared
+      bash ${fixture}/scripts/easygate deploy --domain example.test --skip-route --demo --no-install-cloudflared
   )
   (
     cd "$fixture"
     HOME="$home" EASYGATE_HOME="$runtime" EASYGATE_CLOUDFLARED_HOME="${home}/.cloudflared" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" \
-      bash scripts/deploy.sh --domain example.test --skip-route --demo --no-install-cloudflared
+      bash ${fixture}/scripts/easygate deploy --domain example.test --skip-route --demo --no-install-cloudflared
   )
 
   assert_contains "${runtime}/compose/.env" "BASE_DOMAIN=example.test"
@@ -152,7 +152,7 @@ run_compose_deploy_blocks_native_test() {
   if (
     cd "$fixture"
     HOME="$home" EASYGATE_HOME="$runtime" EASYGATE_CLOUDFLARED_HOME="${home}/.cloudflared" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" \
-      bash scripts/deploy.sh --domain example.test --skip-route --no-install-cloudflared
+      bash ${fixture}/scripts/easygate deploy --domain example.test --skip-route --no-install-cloudflared
   ); then
     fail "原生模式运行时 deploy.sh 不应继续部署"
   fi
@@ -219,12 +219,12 @@ run_native_deploy_behavior_test() {
   (
     cd "$fixture"
     HOME="$home" EASYGATE_HOME="$runtime" EASYGATE_CLOUDFLARED_HOME="${home}/.cloudflared" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" EASYGATE_CI=true \
-      bash scripts/deploy-native.sh --domain example.test --skip-route --no-install-cloudflared --no-install-traefik
+      bash ${fixture}/scripts/easygate deploy --native --domain example.test --skip-route --no-install-cloudflared --no-install-traefik
   )
   (
     cd "$fixture"
     HOME="$home" EASYGATE_HOME="$runtime" EASYGATE_CLOUDFLARED_HOME="${home}/.cloudflared" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" EASYGATE_CI=true \
-      bash scripts/deploy-native.sh --domain example.test --skip-route --no-install-cloudflared --no-install-traefik
+      bash ${fixture}/scripts/easygate deploy --native --domain example.test --skip-route --no-install-cloudflared --no-install-traefik
   )
 
   assert_contains "${runtime}/native/.env" "EASYGATE_DEPLOY_MODE=native"
@@ -267,7 +267,7 @@ run_native_deploy_blocks_compose_test() {
   if (
     cd "$fixture"
     HOME="$home" EASYGATE_HOME="$runtime" EASYGATE_CLOUDFLARED_HOME="${home}/.cloudflared" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" EASYGATE_MOCK_COMPOSE_RUNNING=true \
-      bash scripts/deploy-native.sh --domain example.test --skip-route --no-install-cloudflared --no-install-traefik
+      bash ${fixture}/scripts/easygate deploy --native --domain example.test --skip-route --no-install-cloudflared --no-install-traefik
   ); then
     fail "Docker Compose 模式运行时 deploy-native.sh 不应继续部署"
   fi

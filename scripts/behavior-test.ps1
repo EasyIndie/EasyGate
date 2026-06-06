@@ -216,8 +216,8 @@ function Test-DeployBehavior {
     Invoke-WithMockPath $BinDir {
       Push-Location $Fixture
       try {
-        & ".\scripts\deploy.ps1" -Domain "example.test" -SkipRoute -Demo -NoInstallCloudflared
-        & ".\scripts\deploy.ps1" -Domain "example.test" -SkipRoute -Demo -NoInstallCloudflared
+        & ".\scripts\easygate.ps1" deploy -Domain "example.test" -SkipRoute -Demo -NoInstallCloudflared
+        & ".\scripts\easygate.ps1" deploy -Domain "example.test" -SkipRoute -Demo -NoInstallCloudflared
       }
       finally {
         Pop-Location
@@ -278,8 +278,8 @@ function Test-ComposeDeployBlocksNative {
       Push-Location $Fixture
       try {
         Invoke-ExpectedNativeFailure {
-          & pwsh -NoProfile -File ".\scripts\deploy.ps1" -Domain "example.test" -SkipRoute -NoInstallCloudflared
-        } "原生模式运行时 deploy.ps1 不应继续部署"
+          & pwsh -NoProfile -File ".\scripts\easygate.ps1" deploy -Domain "example.test" -SkipRoute -NoInstallCloudflared
+        } "原生模式运行时 easygate.ps1 deploy 不应继续部署"
       }
       finally {
         Pop-Location
@@ -294,7 +294,7 @@ function Test-ComposeDeployBlocksNative {
 
   $LogText = Get-Content -Raw $LogFile
   if ($LogText.Contains("docker compose up -d")) {
-    Fail "原生模式运行时 deploy.ps1 不应调用 docker compose up"
+    Fail "原生模式运行时 easygate.ps1 deploy 不应调用 docker compose up"
   }
 }
 
@@ -396,8 +396,8 @@ function Test-NativeDeployBehavior {
     Invoke-WithMockPath $BinDir {
       Push-Location $Fixture
       try {
-        & ".\scripts\deploy-native.ps1" -Domain "example.test" -SkipRoute -NoInstallCloudflared -NoInstallTraefik
-        & ".\scripts\deploy-native.ps1" -Domain "example.test" -SkipRoute -NoInstallCloudflared -NoInstallTraefik
+        & ".\scripts\easygate.ps1" deploy -Native -Domain "example.test" -SkipRoute -NoInstallCloudflared -NoInstallTraefik
+        & ".\scripts\easygate.ps1" deploy -Native -Domain "example.test" -SkipRoute -NoInstallCloudflared -NoInstallTraefik
       }
       finally {
         Pop-Location
@@ -459,8 +459,8 @@ function Test-NativeDeployBlocksCompose {
       Push-Location $Fixture
       try {
         Invoke-ExpectedNativeFailure {
-          & pwsh -NoProfile -File ".\scripts\deploy-native.ps1" -Domain "example.test" -SkipRoute -NoInstallCloudflared -NoInstallTraefik
-        } "Docker Compose 模式运行时 deploy-native.ps1 不应继续部署"
+          & pwsh -NoProfile -File ".\scripts\easygate.ps1" deploy -Native -Domain "example.test" -SkipRoute -NoInstallCloudflared -NoInstallTraefik
+        } "Docker Compose 模式运行时 easygate.ps1 deploy -Native 不应继续部署"
       }
       finally {
         Pop-Location

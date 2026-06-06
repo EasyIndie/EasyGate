@@ -36,10 +36,6 @@ Write-Info "检查关键文件"
   "scripts/test.ps1",
   "scripts/cleanup.sh",
   "scripts/cleanup.ps1",
-  "scripts/deploy.sh",
-  "scripts/deploy.ps1",
-  "scripts/deploy-native.sh",
-  "scripts/deploy-native.ps1",
   "scripts/local-acceptance.sh",
   "scripts/local-acceptance.ps1",
   "scripts/local-acceptance-native.sh",
@@ -67,8 +63,6 @@ Write-Info "检查 PowerShell 脚本语法"
 @(
   "scripts/test.ps1",
   "scripts/cleanup.ps1",
-  "scripts/deploy.ps1",
-  "scripts/deploy-native.ps1",
   "scripts/easygate.ps1",
   "scripts/install.ps1",
   "scripts/local-acceptance.ps1",
@@ -122,28 +116,20 @@ if ($ExampleText -notmatch "traefik\.docker\.network=easygate-proxy") {
 }
 
 Write-Info "检查 cloudflared 自动安装入口"
-$DeploySh = Get-Content -Raw scripts/deploy.sh
-$DeployPs = Get-Content -Raw scripts/deploy.ps1
 $EasyGateSh = Get-Content -Raw scripts/easygate
 $EasyGatePs = Get-Content -Raw scripts/easygate.ps1
 $InstallSh = Get-Content -Raw scripts/install.sh
 $InstallPs = Get-Content -Raw scripts/install.ps1
 
-if ($DeploySh -notmatch "--no-install-cloudflared") {
   Fail "deploy.sh 缺少 cloudflared 自动安装开关"
 }
 $LibSh = Get-Content -Raw scripts/lib.sh
 if ($LibSh -notmatch "EASYGATE_CLOUDFLARED_HOME") {
   Fail "lib.sh 缺少 cloudflared home 覆盖入口"
 }
-if ($DeploySh -notmatch "EASYGATE_HOME") {
   Fail "deploy.sh 缺少 EASYGATE_HOME 运行时目录"
 }
-if ($DeployPs -notmatch "EASYGATE_CLOUDFLARED_HOME") {
-  Fail "deploy.ps1 缺少 cloudflared home 覆盖入口"
 }
-if ($DeployPs -notmatch "EASYGATE_HOME") {
-  Fail "deploy.ps1 缺少 EASYGATE_HOME 运行时目录"
 }
 if ($EasyGateSh -notmatch "EASYGATE_HOME") {
   Fail "easygate CLI 缺少 EASYGATE_HOME 运行时目录"
@@ -170,19 +156,13 @@ if ($EasyGateSh -notmatch "cloudflared-linux-") {
 if ($EasyGateSh -notmatch "cloudflared-darwin-") {
   Fail "easygate CLI 缺少 macOS cloudflared 下载逻辑"
 }
-if ($DeployPs -notmatch "cloudflared-windows-") {
-  Fail "deploy.ps1 缺少 Windows cloudflared 下载逻辑"
 }
 if ($EasyGatePs -notmatch "cloudflared-windows-") {
   Fail "easygate.ps1 缺少 Windows cloudflared 下载逻辑"
 }
 
 Write-Info "检查原生模式入口"
-$DeployNativeSh = Get-Content -Raw scripts/deploy-native.sh
-$DeployNativePs = Get-Content -Raw scripts/deploy-native.ps1
 $LocalNativePs = Get-Content -Raw scripts/local-acceptance-native.ps1
-if ($DeployNativeSh -notmatch "--local-only") {
-  Fail "deploy-native.sh 缺少 local-only 验收入口"
 }
 if ($LibSh -notmatch "traefik_v") {
   Fail "lib.sh 缺少 Traefik 下载逻辑"
@@ -190,29 +170,16 @@ if ($LibSh -notmatch "traefik_v") {
 if ($EasyGateSh -notmatch "traefik_v") {
   Fail "easygate CLI 缺少 Traefik 下载逻辑"
 }
-if ($DeployNativeSh -notmatch "config.native.yml") {
-  Fail "deploy-native.sh 缺少原生 cloudflared 配置"
 }
-if ($DeployNativeSh -notmatch "providers:") {
-  Fail "deploy-native.sh 缺少原生 Traefik 配置生成"
 }
-if ($DeployNativePs -notmatch "config.native.yml") {
-  Fail "deploy-native.ps1 缺少原生 cloudflared 配置"
 }
 if ($LocalNativePs -notmatch "EASYGATE_CLI") {
   Fail "local-acceptance-native.ps1 缺少独立 CLI 覆盖入口"
 }
-if ($DeploySh -notmatch "assert_no_native_deployment") {
   Fail "deploy.sh 缺少原生模式互斥检查"
 }
-if ($DeployNativeSh -notmatch "assert_no_compose_deployment") {
-  Fail "deploy-native.sh 缺少 Compose 模式互斥检查"
 }
-if ($DeployPs -notmatch "Test-NativeDeploymentActive") {
-  Fail "deploy.ps1 缺少原生模式互斥检查"
 }
-if ($DeployNativePs -notmatch "Test-ComposeDeploymentActive") {
-  Fail "deploy-native.ps1 缺少 Compose 模式互斥检查"
 }
 
 Write-Info "检查 GitHub Actions Node 24 兼容配置"
@@ -282,3 +249,5 @@ else {
 }
 
 Write-Info "全部检查通过"
+
+
