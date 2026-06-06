@@ -928,11 +928,6 @@ EOF_DYNAMIC
         servers:
           - url: http://127.0.0.1:${native_test_api_port}
 EOF_DEMO
-  else
-    cat >> "${EASYGATE_HOME}/native/dynamic/services.yml" <<'EOF_NO_DEMO'
-
-  services: {}
-EOF_NO_DEMO
   fi
 
   if [[ "$local_only" != true ]]; then

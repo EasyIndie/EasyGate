@@ -154,11 +154,6 @@ if [[ "$START_DEMO" == true ]]; then
         servers:
           - url: http://127.0.0.1:${NATIVE_TEST_API_PORT}
 EOF_DEMO
-else
-  cat >> "${EASYGATE_HOME}/native/dynamic/services.yml" <<'EOF_NO_DEMO'
-
-  services: {}
-EOF_NO_DEMO
 fi
 
 if [[ "$LOCAL_ONLY" != true ]]; then
