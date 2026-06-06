@@ -54,8 +54,14 @@ usage() {
   easygate start|stop|restart      服务管理（自动检测模式）
   easygate ps|logs|config          状态与日志（自动检测模式）
   easygate demo start|stop|restart Demo 服务（自动检测模式）
+  easygate service add|remove|list  自定义服务管理（自动检测模式）
   easygate uninstall               停止服务 + 删除所有数据 + 清理 PATH
   easygate home|version            信息查询
+
+service 子命令：
+  easygate service add --name <name> --host <hostname> --url <url>
+  easygate service remove <name>
+  easygate service list
 
 常用选项：
   --domain <domain>       主域名，例如 example.com
@@ -718,6 +724,7 @@ EOF_CONFIG
   fi
 
   write_mode_file "compose"
+  install_service_helper
   register_logrotate_timer 2>/dev/null || true
 
   info "部署完成"
@@ -832,6 +839,31 @@ start_process() {
   printf '%s\n' "$!" > "$pid_file"
 
   pid_lock_release "$name"
+}
+
+# 安装 service-helper.py 到运行时目录
+install_service_helper() {
+  mkdir -p "${EASYGATE_HOME}/lib"
+  local src="${SCRIPT_DIR:-${0%/*}}/service-helper.py"
+  if [[ -f "$src" ]]; then
+    cp "$src" "${EASYGATE_HOME}/lib/service-helper.py"
+  elif [[ ! -f "${EASYGATE_HOME}/lib/service-helper.py" ]]; then
+    # 如果源码不可用且运行时也不存在，从嵌入式安装
+    # (standalone CLI 场景需要从 installer 复制)
+    warn "service-helper.py 不可用，service 命令将无法使用"
+  fi
+}
+
+# 获取 service helper 路径（优先运行时，fallback 源码）
+_service_helper() {
+  local helper="${EASYGATE_HOME}/lib/service-helper.py"
+  if [[ -f "$helper" ]]; then
+    printf '%s' "$helper"
+  elif [[ -f "${SCRIPT_DIR:-${0%/*}}/service-helper.py" ]]; then
+    printf '%s' "${SCRIPT_DIR:-${0%/*}}/service-helper.py"
+  else
+    return 1
+  fi
 }
 
 write_native_demo_server() {
@@ -1083,6 +1115,7 @@ EOF_CLOUDFLARED
   trap - INT TERM
 
   write_mode_file "native"
+  install_service_helper
   register_logrotate_timer 2>/dev/null || true
 
   info "原生部署完成"
@@ -1367,6 +1400,61 @@ unregister_native_services() {
         "${EASYGATE_HOME}/run/native-demo-test-api.pid"
 }
 
+
+_service_yaml_path() {
+  local mode
+  mode="$(detect_mode)"
+  case "$mode" in
+    compose) printf '%s/traefik/dynamic/localhost-services.yml' "$EASYGATE_HOME" ;;
+    native)  printf '%s/native/dynamic/services.yml' "$EASYGATE_HOME" ;;
+    *) error "未找到已部署的服务"; return 1 ;;
+  esac
+}
+
+service_add() {
+  local name="" host="" url=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --name) shift; name="${1:-}" ;;
+      --host) shift; host="${1:-}" ;;
+      --url) shift; url="${1:-}" ;;
+      *) error "未知参数：$1"; return 1 ;;
+    esac
+    shift
+  done
+  [[ -z "$name" ]] && { error "缺少 --name（服务名称）"; return 1; }
+  [[ -z "$host" ]] && { error "缺少 --host（访问域名，如 app.example.com）"; return 1; }
+  [[ -z "$url" ]] && { error "缺少 --url（上游地址，如 http://192.168.1.100:8080）"; return 1; }
+
+  local yaml_file
+  yaml_file="$(_service_yaml_path)" || return 1
+  mkdir -p "$(dirname "$yaml_file")"
+  local helper; helper="$(_service_helper)" || { error "service-helper.py 不可用"; return 1; }
+  python3 "$helper" add "$yaml_file" "$name" "$host" "$url"
+}
+
+service_remove() {
+  local name="${1:-}"
+  [[ -z "$name" ]] && { error "用法：easygate service remove <name>"; return 1; }
+  local yaml_file
+  yaml_file="$(_service_yaml_path)" || return 1
+  [[ ! -f "$yaml_file" ]] && { warn "服务配置文件不存在：${yaml_file}"; return 0; }
+  local helper; helper="$(_service_helper)" || { error "service-helper.py 不可用"; return 1; }
+  python3 "$helper" remove "$yaml_file" "$name"
+}
+
+service_list() {
+  local yaml_file
+  yaml_file="$(_service_yaml_path)" 2>/dev/null || yaml_file=""
+  if [[ -z "$yaml_file" || ! -f "$yaml_file" ]]; then
+    info "暂无已配置的服务"
+    return 0
+  fi
+  local helper; helper="$(_service_helper)" || { error "service-helper.py 不可用"; return 1; }
+  python3 "$helper" list "$yaml_file"
+}
+
+
 show_status() {
   local mode
   mode="$(detect_mode)"
@@ -1518,6 +1606,14 @@ case "$cmd" in
         esac
         ;;
       *) error "未找到已部署的服务，请先执行 easygate deploy" ; exit 1 ;;
+    esac
+    ;;
+  service)
+    subcmd="${1:-}"
+    [[ "${1:-}" != "" ]] && shift || true
+    case "$subcmd" in
+      add|remove|list) service_"$subcmd" "$@" ;;
+      *) error "未知 service 子命令：${subcmd}。可用：add|remove|list"; usage; exit 1 ;;
     esac
     ;;
   home) printf '%s\n' "$EASYGATE_HOME" ;;
