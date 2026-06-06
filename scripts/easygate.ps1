@@ -461,8 +461,8 @@ function Assert-NoComposeDeployment {
 }
 
 function Deploy-Compose {
-  param([string[]]$Args)
-  $Options = Parse-Options $Args
+  param([string[]]$FuncArgs)
+  $Options = Parse-Options $FuncArgs
   if (Test-Option $Options "Help") {
     Show-Usage
     return
@@ -660,8 +660,8 @@ function Stop-NativeDemo {
 }
 
 function Deploy-Native {
-  param([string[]]$Args)
-  $Options = Parse-Options $Args
+  param([string[]]$FuncArgs)
+  $Options = Parse-Options $FuncArgs
   if (Test-Option $Options "Help") {
     Show-Usage
     return
@@ -885,7 +885,7 @@ function Get-ServiceHelper {
 }
 
 function Invoke-ServiceHelper {
-  param([string[]]$Args)
+  param([string[]]$FuncArgs)
   $Helper = Get-ServiceHelper
   if (-not $Helper) { Fail "service-helper.py 不可用" }
   $Python = Get-Command "python3" -ErrorAction SilentlyContinue
@@ -895,10 +895,10 @@ function Invoke-ServiceHelper {
 }
 
 function Start-ServiceAdd {
-  param([string[]]$Args)
+  param([string[]]$FuncArgs)
   $Name = $Host = $Url = $null
-  for ($i = 0; $i -lt $Args.Count; $i++) {
-    switch -Regex ($Args[$i]) {
+  for ($i = 0; $i -lt $FuncArgs.Count; $i++) {
+    switch -Regex ($FuncArgs[$i]) {
       '^--?name$|^-Name$' { $i++; $Name = $Args[$i] }
       '^--?host$|^-Host$' { $i++; $Host = $Args[$i] }
       '^--?url$|^-Url$' { $i++; $Url = $Args[$i] }
@@ -915,8 +915,8 @@ function Start-ServiceAdd {
 }
 
 function Start-ServiceRemove {
-  param([string[]]$Args)
-  $Name = if ($Args.Count -gt 0) { $Args[0] } else { $null }
+  param([string[]]$FuncArgs)
+  $Name = if ($FuncArgs.Count -gt 0) { $FuncArgs[0] } else { $null }
   if (-not $Name) { Fail "用法：easygate.ps1 service remove <name>" }
 
   $YamlFile = Get-ServiceYamlPath
