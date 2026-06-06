@@ -567,16 +567,10 @@ try {
   Test-StandaloneCliBehavior
   Test-StandaloneInstallBehavior
   Test-CleanupBehavior
-    Write-Info "PowerShell 行为测试通过"
+  Write-Info "PowerShell 行为测试通过"
 }
 finally {
-  try {
-    # Kill orphan mock processes that may hold file locks
-    Get-Process "traefik","cloudflared","native-demo-server" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-  } catch {
-    # Non-critical; runner cleans up after job
-  }
-  if (Test-Path $TempRoot) {
-    Remove-Item $TempRoot -Recurse -Force -ErrorAction SilentlyContinue
-  }
+  # Cleanup skipped - runner will delete temp directory after job
+  # (Get-Process/Remove-Item with $ErrorActionPreference=Stop on PS5.1
+  #  can cause spurious failures when orphan processes hold file locks)
 }
