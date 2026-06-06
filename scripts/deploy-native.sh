@@ -194,7 +194,7 @@ fi
 
 if [[ "$START_DEMO" == true ]]; then
   python_bin="$(find_python)" || { error "原生 demo 需要 python3 或 python"; exit 1; }
-  cp "${ROOT_DIR}/scripts/native-demo-server.py" "${EASYGATE_HOME}/lib/native-demo-server.py"
+  write_native_demo_server
   start_process "native-demo-api" "$python_bin" "${EASYGATE_HOME}/lib/native-demo-server.py" --port "$NATIVE_API_PORT"
   start_process "native-demo-test-api" "$python_bin" "${EASYGATE_HOME}/lib/native-demo-server.py" --port "$NATIVE_TEST_API_PORT"
 fi

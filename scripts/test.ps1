@@ -50,8 +50,6 @@ Write-Info "检查关键文件"
   "scripts/local-acceptance-native.ps1",
   "scripts/behavior-test.sh",
   "scripts/behavior-test.ps1",
-  "scripts/native-demo-server.py",
-  "scripts/compose.sh",
   "scripts/lib.sh",
   "scripts/easygate",
   "scripts/easygate.ps1",

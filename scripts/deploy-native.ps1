@@ -216,6 +216,44 @@ function Prepare-TunnelCredentials {
   Write-Info "已复制 tunnel 凭据到 $CredentialTarget"
 }
 
+function Write-NativeDemoServer {
+  $LibDir = Join-Path $EasyGateHome "lib"
+  New-Item -ItemType Directory -Force -Path $LibDir | Out-Null
+  @'
+import argparse
+import socket
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        body = "\n".join([
+            f"Hostname: {socket.gethostname()}",
+            "IP: 127.0.0.1",
+            f"RemoteAddr: {self.client_address[0]}:{self.client_address[1]}",
+            f"Host: {self.headers.get('Host', '')}",
+            f"Path: {self.path}",
+            "",
+        ]).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, _format, *_args):
+        return
+
+def main():
+    parser = argparse.ArgumentParser(description="EasyGate native demo HTTP server")
+    parser.add_argument("--port", type=int, required=True)
+    args = parser.parse_args()
+    ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
+
+if __name__ == "__main__":
+    main()
+'@ | Set-Content -Path (Join-Path $LibDir "native-demo-server.py") -Encoding UTF8
+}
+
 function Find-Python {
   $Python3 = Get-Command python3 -ErrorAction SilentlyContinue
   if ($Python3) {
@@ -419,7 +457,7 @@ if ($Demo) {
     Fail "原生 demo 需要 python3 或 python"
   }
   $DemoScript = Join-Path $EasyGateHome "lib\native-demo-server.py"
-  Copy-Item (Join-Path $RootDir "scripts\native-demo-server.py") $DemoScript -Force
+  Write-NativeDemoServer
   Start-NativeProcess "native-demo-api" $Python @($DemoScript, "--port", $ApiPort)
   Start-NativeProcess "native-demo-test-api" $Python @($DemoScript, "--port", $TestApiPort)
 }
