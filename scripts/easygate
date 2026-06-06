@@ -712,6 +712,7 @@ EOF_CONFIG
   fi
 
   write_mode_file "compose"
+  register_logrotate_timer
 
   info "部署完成"
   printf '\n后续检查：\n'
@@ -1076,6 +1077,7 @@ EOF_CLOUDFLARED
   trap - INT TERM
 
   write_mode_file "native"
+  register_logrotate_timer
 
   info "原生部署完成"
   printf '\n后续检查：\n'
@@ -1152,6 +1154,87 @@ restart_services() {
       info "服务已重启"
       ;;
     *) error "未找到已部署的服务，请先执行 easygate deploy" ; return 1 ;;
+  esac
+}
+
+# 日志轮转：单文件超过 max_size (默认 10MB) 时归档
+rotate_logs() {
+  local max_size="${EASYGATE_LOG_MAX_SIZE:-10485760}"  # 10MB
+  local keep="${EASYGATE_LOG_KEEP:-5}"
+  local log_dir="${EASYGATE_HOME}/logs"
+  [[ -d "$log_dir" ]] || return 0
+  local log_file
+  for log_file in "$log_dir"/*.log; do
+    [[ -f "$log_file" ]] || continue
+    local size
+    size="$(stat -f%z "$log_file" 2>/dev/null || stat -c%s "$log_file" 2>/dev/null || echo 0)"
+    if [[ "$size" -gt "$max_size" ]]; then
+      # 轮转：删除最旧的，依次移动
+      local i
+      rm -f "${log_file}.${keep}"
+      for ((i = keep - 1; i >= 1; i--)); do
+        [[ -f "${log_file}.${i}" ]] && mv "${log_file}.${i}" "${log_file}.$((i + 1))"
+      done
+      mv "$log_file" "${log_file}.1"
+      touch "$log_file"
+      info "已轮转日志：${log_file##*/}"
+    fi
+  done
+}
+
+# 注册日志轮转定时任务
+register_logrotate_timer() {
+  case "$(uname -s)" in
+    Darwin)
+      local plist="${HOME}/Library/LaunchAgents/com.easygate.logrotate.plist"
+      cat > "$plist" <<'EOF_PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.easygate.logrotate</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>EASYGATE_BIN</string>
+        <string>logs</string>
+        <string>--rotate</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>86400</integer>
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>
+EOF_PLIST
+      sed -i '' "s|EASYGATE_BIN|${EASYGATE_HOME}/bin/easygate|" "$plist"
+      launchctl unload "$plist" >/dev/null 2>&1 || true
+      launchctl load "$plist" >/dev/null 2>&1 || true
+      ;;
+    Linux)
+      mkdir -p "${HOME}/.config/systemd/user"
+      cat > "${HOME}/.config/systemd/user/easygate-logrotate.service" <<EOF_UNIT
+[Unit]
+Description=EasyGate Log Rotation
+
+[Service]
+Type=oneshot
+ExecStart=${EASYGATE_HOME}/bin/easygate logs --rotate
+EOF_UNIT
+      cat > "${HOME}/.config/systemd/user/easygate-logrotate.timer" <<EOF_TIMER
+[Unit]
+Description=EasyGate Daily Log Rotation
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF_TIMER
+      systemctl --user daemon-reload >/dev/null 2>&1 || true
+      systemctl --user enable --now easygate-logrotate.timer >/dev/null 2>&1 || true
+      ;;
   esac
 }
 
@@ -1254,22 +1337,23 @@ stop_native_demo() {
 unregister_native_services() {
   case "$(uname -s)" in
     Linux)
-      # 先停再注销
-      systemctl --user stop "easygate-traefik.service" "easygate-cloudflared.service" >/dev/null 2>&1 || true
-      systemctl --user disable "easygate-traefik.service" "easygate-cloudflared.service" >/dev/null 2>&1 || true
+      systemctl --user stop "easygate-traefik.service" "easygate-cloudflared.service" "easygate-logrotate.timer" >/dev/null 2>&1 || true
+      systemctl --user disable "easygate-traefik.service" "easygate-cloudflared.service" "easygate-logrotate.timer" >/dev/null 2>&1 || true
       rm -f "${HOME}/.config/systemd/user/easygate-traefik.service" \
-            "${HOME}/.config/systemd/user/easygate-cloudflared.service"
+            "${HOME}/.config/systemd/user/easygate-cloudflared.service" \
+            "${HOME}/.config/systemd/user/easygate-logrotate.service" \
+            "${HOME}/.config/systemd/user/easygate-logrotate.timer"
       systemctl --user daemon-reload >/dev/null 2>&1 || true
       ;;
     Darwin)
-      # launchctl unload 停止并卸载 plist
       launchctl unload "${HOME}/Library/LaunchAgents/com.easygate.native-traefik.plist" >/dev/null 2>&1 || true
       launchctl unload "${HOME}/Library/LaunchAgents/com.easygate.native-cloudflared.plist" >/dev/null 2>&1 || true
+      launchctl unload "${HOME}/Library/LaunchAgents/com.easygate.logrotate.plist" >/dev/null 2>&1 || true
       rm -f "${HOME}/Library/LaunchAgents/com.easygate.native-traefik.plist" \
-            "${HOME}/Library/LaunchAgents/com.easygate.native-cloudflared.plist"
+            "${HOME}/Library/LaunchAgents/com.easygate.native-cloudflared.plist" \
+            "${HOME}/Library/LaunchAgents/com.easygate.logrotate.plist"
       ;;
   esac
-  # 清理 PID 文件
   rm -f "${EASYGATE_HOME}/run/native-traefik.pid" \
         "${EASYGATE_HOME}/run/native-cloudflared.pid" \
         "${EASYGATE_HOME}/run/native-demo-api.pid" \
@@ -1354,6 +1438,13 @@ case "$cmd" in
   restart) restart_services "$@" ;;
   ps|status) show_status "$@" ;;
   logs)
+    # --rotate: 仅执行日志轮转
+    if [[ "${1:-}" == "--rotate" ]]; then
+      rotate_logs
+      exit 0
+    fi
+    # 查看前先检查是否需要轮转
+    rotate_logs
     mode="$(detect_mode)"
     case "$mode" in
       compose) compose logs -f traefik cloudflared "$@" ;;
