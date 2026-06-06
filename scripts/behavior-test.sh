@@ -338,45 +338,47 @@ run_standalone_cli_behavior_test() {
 
 run_install_behavior_test() {
   local runtime="${TMP_DIR}/install-runtime"
+  local mock_home="${TMP_DIR}/install-mock-home"
 
   info "验证 install.sh 可安装 standalone CLI"
-  EASYGATE_HOME="$runtime" EASYGATE_LOCAL_CLI="${ROOT_DIR}/scripts/easygate" \
+  # 覆盖 HOME 防止 add_to_path 写入真实 shell 配置文件
+  # 同时创建 .bashrc/.bash_profile 兼容不同 SHELL 环境的检测逻辑
+  mkdir -p "$mock_home"
+  printf '' > "${mock_home}/.bashrc"
+  printf '' > "${mock_home}/.bash_profile"
+
+  HOME="$mock_home" EASYGATE_HOME="$runtime" EASYGATE_LOCAL_CLI="${ROOT_DIR}/scripts/easygate" \
     bash "${ROOT_DIR}/scripts/install.sh" >/dev/null
 
   assert_file "${runtime}/bin/easygate"
   EASYGATE_HOME="$runtime" "${runtime}/bin/easygate" version | grep -q "easygate" || fail "安装后的 easygate 无法运行"
 
-  # 验证写入的 PATH 行格式 —— 路径用引号包裹，$PATH 可展开
-  # 在测试环境中不检查真实 rc 文件（HOME 可能被 mock），
-  # 而是直接验证 install.sh 中 add_to_path 函数生成的行格式
-  local add_to_path_body
-  add_to_path_body="$(sed -n '/^add_to_path()/,/^}/p' "${ROOT_DIR}/scripts/install.sh")"
-  if echo "$add_to_path_body" | grep -q 'export PATH='; then
-    local export_line
-    export_line="$(echo "$add_to_path_body" | grep 'export PATH=' | head -1)"
-    # 必须包含单引号或双引号保护路径，且 $PATH 可展开
-    if ! echo "$export_line" | grep -qE "export PATH=['\"].*['\"].*\\\$PATH"; then
-      fail "install.sh add_to_path 生成的 PATH 行格式异常：${export_line}"
-    fi
-  else
-    fail "install.sh 缺少 PATH 导出逻辑"
+  # 验证 PATH 已写入 mock 配置文件而非真实文件
+  local found=false
+  for f in .bashrc .bash_profile; do
+    if grep -qs "${runtime}/bin" "${mock_home}/${f}" 2>/dev/null; then found=true; break; fi
+  done
+  if [[ "$found" != true ]]; then
+    fail "install.sh 未将 CLI 目录写入 mock shell 配置文件"
   fi
 }
 
 run_install_pipe_behavior_test() {
   local runtime="${TMP_DIR}/install-pipe-runtime"
+  local mock_home="${TMP_DIR}/install-pipe-mock-home"
 
   info "验证 install.sh 通过管道模式（curl | bash）可正常安装"
   # 通过 stdin 管道传递脚本，模拟 curl | bash 场景
   # 此时 BASH_SOURCE 为空，脚本不能依赖 lib.sh 或文件系统上下文
-  EASYGATE_HOME="$runtime" EASYGATE_LOCAL_CLI="${ROOT_DIR}/scripts/easygate" \
+  mkdir -p "$mock_home"
+  printf '' > "${mock_home}/.bashrc"
+  printf '' > "${mock_home}/.bash_profile"
+
+  HOME="$mock_home" EASYGATE_HOME="$runtime" EASYGATE_LOCAL_CLI="${ROOT_DIR}/scripts/easygate" \
     bash < "${ROOT_DIR}/scripts/install.sh" >/dev/null
 
   assert_file "${runtime}/bin/easygate"
   EASYGATE_HOME="$runtime" "${runtime}/bin/easygate" version | grep -q "easygate" || fail "管道安装后的 easygate 无法运行"
-
-  # 验证管道模式下不会因缺失 lib.sh 或 BASH_SOURCE 而失败
-  # （测试本身通过了上面的断言就证明没问题）
 }
 
 run_cleanup_command_behavior_test() {
