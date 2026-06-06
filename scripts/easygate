@@ -1367,10 +1367,12 @@ show_status() {
     compose) compose ps "$@" ;;
     native)
       info "原生模式进程状态："
-      # 优先查询系统服务管理器
+      local showed_system=false
+      # 查询系统服务管理器（traefik + cloudflared）
       case "$(uname -s)" in
         Darwin)
           if command -v launchctl >/dev/null 2>&1; then
+            showed_system=true
             for svc in native-traefik native-cloudflared; do
               local label="com.easygate.${svc}"
               local pid
@@ -1382,11 +1384,11 @@ show_status() {
                 printf '  %-15s stopped\n' "$name"
               fi
             done
-            return
           fi
           ;;
         Linux)
           if command -v systemctl >/dev/null 2>&1; then
+            showed_system=true
             for svc in easygate-traefik easygate-cloudflared; do
               local active
               active="$(systemctl --user is-active "${svc}.service" 2>/dev/null)" || true
@@ -1397,14 +1399,25 @@ show_status() {
                 printf '  %-15s stopped\n' "$name"
               fi
             done
-            return
           fi
           ;;
       esac
-      # 无系统服务时 fallback 到 PID 文件
+      # 系统服务不可用时，fallback PID 文件查 traefik/cloudflared
+      if [[ "$showed_system" != true ]]; then
+        for pid_file in \
+          "${EASYGATE_HOME}/run/native-traefik.pid" \
+          "${EASYGATE_HOME}/run/native-cloudflared.pid"; do
+          local name
+          name="$(basename "$pid_file" .pid | sed 's/^native-//')"
+          if native_pid_active "$pid_file"; then
+            printf '  %-15s running  (pid %s)\n' "$name" "$(cat "$pid_file")"
+          else
+            printf '  %-15s stopped\n' "$name"
+          fi
+        done
+      fi
+      # demo 服务始终通过 PID 文件检查（nohup 管理，无系统服务）
       for pid_file in \
-        "${EASYGATE_HOME}/run/native-traefik.pid" \
-        "${EASYGATE_HOME}/run/native-cloudflared.pid" \
         "${EASYGATE_HOME}/run/native-demo-api.pid" \
         "${EASYGATE_HOME}/run/native-demo-test-api.pid"; do
         local name
