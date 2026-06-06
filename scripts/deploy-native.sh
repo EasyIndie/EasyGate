@@ -197,9 +197,11 @@ fi
 check_port_available "$TRAEFIK_HTTP_PORT" "Traefik 端口" || exit 1
 
 start_process "native-traefik" "$(command -v traefik)" --configFile="${EASYGATE_HOME}/native/traefik.yml"
+check_process_started "native-traefik" || exit 1
 
 if [[ "$LOCAL_ONLY" != true ]]; then
   start_process "native-cloudflared" "$(command -v cloudflared)" tunnel --config "${EASYGATE_HOME}/cloudflared/config.native.yml" run
+  check_process_started "native-cloudflared" || true
 fi
 
 # Register system services for auto-restart on reboot.

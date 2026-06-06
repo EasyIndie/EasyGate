@@ -233,6 +233,12 @@ function Prepare-TunnelCredentials {
   $CredentialTarget = Join-Path $CloudflaredDir "$Tunnel.json"
   if (Test-Path $CredentialTarget -PathType Leaf) {
     Write-Info "复用已有 tunnel 凭据：$CredentialTarget"
+    try { cloudflared tunnel info $Tunnel | Out-Null }
+    catch {
+      Write-Warn "tunnel ${Tunnel} 凭据已失效，将重新创建"
+      try { cloudflared tunnel delete $Tunnel 2>$null } catch {}
+      Remove-Item $CredentialTarget -Force -ErrorAction SilentlyContinue
+    }
     return
   }
 
@@ -248,7 +254,11 @@ function Prepare-TunnelCredentials {
   $AfterCredential = Find-LatestCredential $CloudflaredHome
   $CredentialSource = if ($AfterCredential) { $AfterCredential } else { $BeforeCredential }
   if (-not $CredentialSource) {
-    Fail "未找到 tunnel 凭据 JSON。请确认 cloudflared tunnel create 是否成功，或将已有凭据保存为 $CredentialTarget。"
+    Write-Warn "未找到 tunnel 凭据，尝试删除并重建 tunnel"
+    try { cloudflared tunnel delete $Tunnel 2>$null } catch {}
+    try { cloudflared tunnel create $Tunnel } catch { Fail "创建 tunnel 失败" }
+    $CredentialSource = Find-LatestCredential $CloudflaredHome
+    if (-not $CredentialSource) { Fail "创建 tunnel 后仍未找到凭据文件" }
   }
   Copy-Item $CredentialSource.FullName $CredentialTarget -Force
   Write-Info "已复制 tunnel 凭据到 $CredentialTarget"

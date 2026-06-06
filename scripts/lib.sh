@@ -246,7 +246,14 @@ prepare_tunnel_credentials() {
 
   if [[ -f "$target" ]]; then
     info "复用已有 tunnel 凭据：${target}"
-    return
+    # 验证凭据仍然有效（tunnel 未被删除或凭据未过期）
+    if ! cloudflared tunnel info "$tunnel_name" >/dev/null 2>&1; then
+      warn "tunnel ${tunnel_name} 凭据已失效，将重新创建"
+      cloudflared tunnel delete "$tunnel_name" >/dev/null 2>&1 || true
+      rm -f "$target"
+    else
+      return
+    fi
   fi
 
   before_credentials="$(find_latest_credentials "${CLOUDFLARED_HOME}" || true)"
@@ -260,8 +267,18 @@ prepare_tunnel_credentials() {
   credentials_source="${after_credentials:-$before_credentials}"
 
   if [[ -z "$credentials_source" || ! -f "$credentials_source" ]]; then
-    error "未找到 tunnel 凭据 JSON。请确认 cloudflared tunnel create 是否成功，或将已有凭据保存为 ${target}。"
-    exit 1
+    # 没有已有凭据，删除并重建 tunnel 以获取新凭据
+    warn "未找到 tunnel 凭据，尝试删除并重建 tunnel"
+    cloudflared tunnel delete "$tunnel_name" >/dev/null 2>&1 || true
+    if ! cloudflared tunnel create "$tunnel_name"; then
+      error "创建 tunnel 失败，请检查 Cloudflare 登录状态"
+      exit 1
+    fi
+    credentials_source="$(find_latest_credentials "${CLOUDFLARED_HOME}" || true)"
+    if [[ -z "$credentials_source" || ! -f "$credentials_source" ]]; then
+      error "创建 tunnel 后仍未找到凭据文件"
+      exit 1
+    fi
   fi
 
   credentials_tmp="$(mktemp "${EASYGATE_HOME}/cloudflared/${tunnel_name}.json.XXXXXX")"
@@ -503,6 +520,23 @@ check_port_available() {
       error "${label} ${port} 已被占用，请先停止该进程再部署"
       return 1
     fi
+  fi
+  return 0
+}
+
+# Check if a process started correctly by verifying the PID is alive.
+# If the process died, show its log tail to help debug.
+check_process_started() {
+  local name="$1"
+  local pid_file="${EASYGATE_HOME}/run/${name}.pid"
+  local log_file="${EASYGATE_HOME}/logs/${name}.log"
+  local pid
+  sleep 1
+  pid="$(cat "$pid_file" 2>/dev/null || true)"
+  if [[ -z "$pid" ]] || ! kill -0 "$pid" >/dev/null 2>&1; then
+    error "${name} 启动失败！日志（${log_file}）："
+    if [[ -f "$log_file" ]]; then tail -n 20 "$log_file" >&2; else error "日志文件不存在"; fi
+    return 1
   fi
   return 0
 }

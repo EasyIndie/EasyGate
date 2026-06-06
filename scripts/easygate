@@ -372,7 +372,14 @@ prepare_tunnel_credentials() {
 
   if [[ -f "$target" ]]; then
     info "复用已有 tunnel 凭据：${target}"
-    return
+    # 验证凭据仍然有效（tunnel 未被删除或凭据未过期）
+    if ! cloudflared tunnel info "$tunnel_name" >/dev/null 2>&1; then
+      warn "tunnel ${tunnel_name} 凭据已失效，将重新创建"
+      cloudflared tunnel delete "$tunnel_name" >/dev/null 2>&1 || true
+      rm -f "$target"
+    else
+      return
+    fi
   fi
 
   before_credentials="$(find_latest_credentials "${CLOUDFLARED_HOME}" || true)"
@@ -386,8 +393,17 @@ prepare_tunnel_credentials() {
   credentials_source="${after_credentials:-$before_credentials}"
 
   if [[ -z "$credentials_source" || ! -f "$credentials_source" ]]; then
-    error "未找到 tunnel 凭据 JSON。请确认 cloudflared tunnel create 是否成功，或将已有凭据保存为 ${target}。"
-    exit 1
+    warn "未找到 tunnel 凭据，尝试删除并重建 tunnel"
+    cloudflared tunnel delete "$tunnel_name" >/dev/null 2>&1 || true
+    if ! cloudflared tunnel create "$tunnel_name"; then
+      error "创建 tunnel 失败，请检查 Cloudflare 登录状态"
+      exit 1
+    fi
+    credentials_source="$(find_latest_credentials "${CLOUDFLARED_HOME}" || true)"
+    if [[ -z "$credentials_source" || ! -f "$credentials_source" ]]; then
+      error "创建 tunnel 后仍未找到凭据文件"
+      exit 1
+    fi
   fi
 
   credentials_tmp="$(mktemp "${EASYGATE_HOME}/cloudflared/${tunnel_name}.json.XXXXXX")"
@@ -714,6 +730,29 @@ check_port_available() {
   return 0
 }
 
+# Check if a process started correctly by verifying the PID is alive
+# and the log file has content.  If the process died, show its log tail.
+check_process_started() {
+  local name="$1"
+  local pid_file="${EASYGATE_HOME}/run/${name}.pid"
+  local log_file="${EASYGATE_HOME}/logs/${name}.log"
+  local pid
+
+  sleep 1
+
+  pid="$(cat "$pid_file" 2>/dev/null || true)"
+  if [[ -z "$pid" ]] || ! kill -0 "$pid" >/dev/null 2>&1; then
+    error "${name} 启动失败！日志（${log_file}）："
+    if [[ -f "$log_file" ]]; then
+      tail -n 20 "$log_file" >&2
+    else
+      error "日志文件不存在"
+    fi
+    return 1
+  fi
+  return 0
+}
+
 find_python() {
   if command -v python3 >/dev/null 2>&1; then command -v python3; return; fi
   if command -v python >/dev/null 2>&1; then command -v python; return; fi
@@ -975,9 +1014,16 @@ EOF_CLOUDFLARED
 
   start_process "native-traefik" "$(command -v traefik)" --configFile="${EASYGATE_HOME}/native/traefik.yml"
   _started_pids+=("${EASYGATE_HOME}/run/native-traefik.pid")
+  if [[ "${EASYGATE_CI:-}" != "true" ]]; then
+    check_process_started "native-traefik" || exit 1
+  fi
+
   if [[ "$local_only" != true ]]; then
     start_process "native-cloudflared" "$(command -v cloudflared)" tunnel --config "${EASYGATE_HOME}/cloudflared/config.native.yml" run
     _started_pids+=("${EASYGATE_HOME}/run/native-cloudflared.pid")
+    if [[ "${EASYGATE_CI:-}" != "true" ]]; then
+      check_process_started "native-cloudflared" || true
+    fi
   fi
 
   # Deployment completed successfully — disarm interrupt trap.
@@ -1102,15 +1148,24 @@ start_native_services() {
 
 stop_native_services() {
   local stopped_by_service=false
+  local unit_file
   # 通过服务管理器停止进程，防止 Restart=on-failure 自动拉起
   case "$(uname -s)" in
     Linux)
-      if systemctl --user is-active easygate-traefik.service >/dev/null 2>&1; then
+      unit_file="${HOME}/.config/systemd/user/easygate-traefik.service"
+      if [[ -f "$unit_file" ]] && command -v systemctl >/dev/null 2>&1; then
         systemctl --user stop "easygate-traefik.service" "easygate-cloudflared.service" >/dev/null 2>&1 && stopped_by_service=true
+        # 停止成功后重置失败计数器，防止系统重启进程
+        systemctl --user reset-failed "easygate-traefik.service" "easygate-cloudflared.service" >/dev/null 2>&1 || true
+      fi
+      # 服务文件存在但 systemctl 不可用或停止失败 → 删除文件防止重拉
+      if [[ -f "$unit_file" ]] && [[ "$stopped_by_service" != true ]]; then
+        rm -f "$unit_file" "${HOME}/.config/systemd/user/easygate-cloudflared.service" 2>/dev/null || true
       fi
       ;;
     Darwin)
-      if launchctl list 2>/dev/null | grep -q "com.easygate.native-traefik"; then
+      unit_file="${HOME}/Library/LaunchAgents/com.easygate.native-traefik.plist"
+      if [[ -f "$unit_file" ]] && command -v launchctl >/dev/null 2>&1; then
         launchctl stop "com.easygate.native-traefik" >/dev/null 2>&1 || true
         launchctl stop "com.easygate.native-cloudflared" >/dev/null 2>&1 || true
         stopped_by_service=true
