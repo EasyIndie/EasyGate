@@ -224,12 +224,12 @@ run_native_deploy_behavior_test() {
 
   (
     cd "$fixture"
-    HOME="$home" EASYGATE_HOME="$runtime" EASYGATE_CLOUDFLARED_HOME="${home}/.cloudflared" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" \
+    HOME="$home" EASYGATE_HOME="$runtime" EASYGATE_CLOUDFLARED_HOME="${home}/.cloudflared" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" EASYGATE_CI=true \
       bash scripts/deploy-native.sh --domain example.test --skip-route --no-install-cloudflared --no-install-traefik
   )
   (
     cd "$fixture"
-    HOME="$home" EASYGATE_HOME="$runtime" EASYGATE_CLOUDFLARED_HOME="${home}/.cloudflared" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" \
+    HOME="$home" EASYGATE_HOME="$runtime" EASYGATE_CLOUDFLARED_HOME="${home}/.cloudflared" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" EASYGATE_CI=true \
       bash scripts/deploy-native.sh --domain example.test --skip-route --no-install-cloudflared --no-install-traefik
   )
 
