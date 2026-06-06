@@ -40,7 +40,6 @@ Write-Info "检查关键文件"
   "scripts/deploy.ps1",
   "scripts/deploy-native.sh",
   "scripts/deploy-native.ps1",
-  "scripts/uninstall.ps1",
   "scripts/local-acceptance.sh",
   "scripts/local-acceptance.ps1",
   "scripts/local-acceptance-native.sh",
@@ -72,7 +71,6 @@ Write-Info "检查 PowerShell 脚本语法"
   "scripts/deploy-native.ps1",
   "scripts/easygate.ps1",
   "scripts/install.ps1",
-  "scripts/uninstall.ps1",
   "scripts/local-acceptance.ps1",
   "scripts/local-acceptance-native.ps1",
   "scripts/behavior-test.ps1"
