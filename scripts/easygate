@@ -844,14 +844,131 @@ start_process() {
 # 安装 service-helper.py 到运行时目录
 install_service_helper() {
   mkdir -p "${EASYGATE_HOME}/lib"
+  local target="${EASYGATE_HOME}/lib/service-helper.py"
+  [[ -f "$target" ]] && return 0
   local src="${SCRIPT_DIR:-${0%/*}}/service-helper.py"
   if [[ -f "$src" ]]; then
-    cp "$src" "${EASYGATE_HOME}/lib/service-helper.py"
-  elif [[ ! -f "${EASYGATE_HOME}/lib/service-helper.py" ]]; then
-    # 如果源码不可用且运行时也不存在，从嵌入式安装
-    # (standalone CLI 场景需要从 installer 复制)
-    warn "service-helper.py 不可用，service 命令将无法使用"
+    cp "$src" "$target"
+    chmod +x "$target"
+    return
   fi
+  # Standalone CLI: 内嵌 base64，解码后写入
+  base64 -d > "$target" <<'EOF_B64'
+IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwoiIiJFYXN5R2F0ZSBzZXJ2aWNlIGhlbHBlciDigJQgYWRk
+L3JlbW92ZS9saXN0IHNlcnZpY2VzIGluIFRyYWVmaWsgZHluYW1pYyBZQU1MLiIiIgoKaW1wb3J0
+IHN5cywgcmUKCgpkZWYgZ2V0X2luZGVudChsaW5lKToKICAgICIiIlJldHVybiBpbmRlbnRhdGlv
+biBsZXZlbCAobnVtYmVyIG9mIGxlYWRpbmcgc3BhY2VzKS4iIiIKICAgIHJldHVybiBsZW4obGlu
+ZSkgLSBsZW4obGluZS5sc3RyaXAoIiAiKSkKCgpkZWYgZ2V0X3NlY3Rpb25fYm91bmRhcmllcyhs
+aW5lcyk6CiAgICAiIiJGaW5kIHN0YXJ0IGFuZCBlbmQgb2Ygcm91dGVycyBhbmQgc2VydmljZXMg
+c2VjdGlvbnMuIiIiCiAgICByb3V0ZXJzX3N0YXJ0ID0gc2VydmljZXNfc3RhcnQgPSAtMQogICAg
+Zm9yIGksIGxpbmUgaW4gZW51bWVyYXRlKGxpbmVzKToKICAgICAgICBzID0gbGluZS5yc3RyaXAo
+KQogICAgICAgIGlmIHMgaW4gKCIgIHJvdXRlcnM6IiwgIiAgcm91dGVyczoge30iKToKICAgICAg
+ICAgICAgcm91dGVyc19zdGFydCA9IGkKICAgICAgICBlbGlmIHMgaW4gKCIgIHNlcnZpY2VzOiIs
+ICIgIHNlcnZpY2VzOiB7fSIpOgogICAgICAgICAgICBzZXJ2aWNlc19zdGFydCA9IGkKICAgIHJl
+dHVybiByb3V0ZXJzX3N0YXJ0LCBzZXJ2aWNlc19zdGFydAoKCmRlZiBmaW5kX2VudHJpZXMobGlu
+ZXMsIHNlY3Rpb25fc3RhcnQpOgogICAgIiIiRmluZCBlbnRyaWVzIGluIGEgWUFNTCBzZWN0aW9u
+IChuYW1lcyBvZiA0LXNwYWNlIGluZGVudGVkIGJsb2NrcykuIiIiCiAgICBlbnRyaWVzID0ge30K
+ICAgIGlmIHNlY3Rpb25fc3RhcnQgPCAwOgogICAgICAgIHJldHVybiBlbnRyaWVzCiAgICBpID0g
+c2VjdGlvbl9zdGFydCArIDEKICAgIHdoaWxlIGkgPCBsZW4obGluZXMpOgogICAgICAgIGxpbmUg
+PSBsaW5lc1tpXQogICAgICAgIGlmIG5vdCBsaW5lLnN0cmlwKCk6CiAgICAgICAgICAgIGkgKz0g
+MQogICAgICAgICAgICBjb250aW51ZQogICAgICAgIGluZGVudCA9IGdldF9pbmRlbnQobGluZSkK
+ICAgICAgICBpZiBpbmRlbnQgPT0gNCBhbmQgbGluZS5yc3RyaXAoKS5lbmRzd2l0aCgiOiIpOgog
+ICAgICAgICAgICBuYW1lID0gbGluZS5zdHJpcCgpWzotMV0KICAgICAgICAgICAgIyBGaW5kIGVu
+ZCBvZiB0aGlzIGVudHJ5CiAgICAgICAgICAgIGogPSBpICsgMQogICAgICAgICAgICB3aGlsZSBq
+IDwgbGVuKGxpbmVzKSBhbmQgKGdldF9pbmRlbnQobGluZXNbal0pID4gNCBvciBub3QgbGluZXNb
+al0uc3RyaXAoKSk6CiAgICAgICAgICAgICAgICBqICs9IDEKICAgICAgICAgICAgZW50cmllc1tu
+YW1lXSA9IChpLCBqKQogICAgICAgICAgICBpID0gagogICAgICAgIGVsaWYgaW5kZW50IDw9IDI6
+ICAjIE5ldyB0b3AtbGV2ZWwgc2VjdGlvbgogICAgICAgICAgICBicmVhawogICAgICAgIGVsc2U6
+CiAgICAgICAgICAgIGkgKz0gMQogICAgcmV0dXJuIGVudHJpZXMKCgpkZWYgbGlzdF9zZXJ2aWNl
+cyhwYXRoKToKICAgIHRyeToKICAgICAgICB3aXRoIG9wZW4ocGF0aCkgYXMgZjoKICAgICAgICAg
+ICAgbGluZXMgPSBmLnJlYWRsaW5lcygpCiAgICBleGNlcHQgRmlsZU5vdEZvdW5kRXJyb3I6CiAg
+ICAgICAgcHJpbnQoIuaaguaXoOW3sumFjee9rueahOacjeWKoSIpCiAgICAgICAgcmV0dXJuCgog
+ICAgcm91dGVyc19zdGFydCwgc2VydmljZXNfc3RhcnQgPSBnZXRfc2VjdGlvbl9ib3VuZGFyaWVz
+KGxpbmVzKQogICAgcm91dGVycyA9IGZpbmRfZW50cmllcyhsaW5lcywgcm91dGVyc19zdGFydCkK
+ICAgIHNlcnZpY2VzID0gZmluZF9lbnRyaWVzKGxpbmVzLCBzZXJ2aWNlc19zdGFydCkKCiAgICAj
+IE1lcmdlIHJvdXRlciBhbmQgc2VydmljZSBpbmZvCiAgICBhbGxfc3ZjcyA9IHt9CiAgICBmb3Ig
+bmFtZSwgKHN0YXJ0LCBlbmQpIGluIHJvdXRlcnMuaXRlbXMoKToKICAgICAgICBpbmZvID0geyJo
+b3N0IjogIj8iLCAidXJsIjogIj8ifQogICAgICAgIGZvciBpIGluIHJhbmdlKHN0YXJ0LCBlbmQp
+OgogICAgICAgICAgICBzID0gbGluZXNbaV0uc3RyaXAoKQogICAgICAgICAgICBtID0gcmUuc2Vh
+cmNoKHIiSG9zdFwoYChbXildKylgXCkiLCBzKQogICAgICAgICAgICBpZiBtOgogICAgICAgICAg
+ICAgICAgaW5mb1siaG9zdCJdID0gbS5ncm91cCgxKQogICAgICAgICAgICBpZiBzLnN0YXJ0c3dp
+dGgoInNlcnZpY2U6ICIpIGFuZCBzICE9IGYic2VydmljZTogYXBpQGludGVybmFsIjoKICAgICAg
+ICAgICAgICAgIHBhc3MgICMgVVJMIGNvbWVzIGZyb20gc2VydmljZXMgc2VjdGlvbgogICAgICAg
+IGFsbF9zdmNzW25hbWVdID0gaW5mbwoKICAgIGZvciBuYW1lLCAoc3RhcnQsIGVuZCkgaW4gc2Vy
+dmljZXMuaXRlbXMoKToKICAgICAgICBpbmZvID0gYWxsX3N2Y3MuZ2V0KG5hbWUsIHsiaG9zdCI6
+ICI/IiwgInVybCI6ICI/In0pCiAgICAgICAgYWxsX3N2Y3NbbmFtZV0gPSBpbmZvCiAgICAgICAg
+Zm9yIGkgaW4gcmFuZ2Uoc3RhcnQsIGVuZCk6CiAgICAgICAgICAgIHMgPSBsaW5lc1tpXS5zdHJp
+cCgpCiAgICAgICAgICAgIGlmIHMuc3RhcnRzd2l0aCgiLSB1cmw6Iik6CiAgICAgICAgICAgICAg
+ICBpbmZvWyJ1cmwiXSA9IHMuc3BsaXQoIi0gdXJsOiIsIDEpWzFdLnN0cmlwKCkKCiAgICBpZiBh
+bGxfc3ZjczoKICAgICAgICBwcmludChmInsnTmFtZSc6PDIwfSB7J0hvc3QnOjwzNX0geydVUkwn
+fSIpCiAgICAgICAgcHJpbnQoIi0iICogODApCiAgICAgICAgZm9yIG5hbWUgaW4gc29ydGVkKGFs
+bF9zdmNzKToKICAgICAgICAgICAgaW5mbyA9IGFsbF9zdmNzW25hbWVdCiAgICAgICAgICAgIHBy
+aW50KGYie25hbWU6PDIwfSB7aW5mby5nZXQoJ2hvc3QnLCAnPycpOjwzNX0ge2luZm8uZ2V0KCd1
+cmwnLCAnPycpfSIpCiAgICBlbHNlOgogICAgICAgIHByaW50KCLmmoLml6Dlt7LphY3nva7nmoTm
+nI3liqEiKQoKCmRlZiBhZGRfc2VydmljZShwYXRoLCBuYW1lLCBob3N0LCB1cmwpOgogICAgdHJ5
+OgogICAgICAgIHdpdGggb3BlbihwYXRoKSBhcyBmOgogICAgICAgICAgICBsaW5lcyA9IGYucmVh
+ZGxpbmVzKCkKICAgIGV4Y2VwdCBGaWxlTm90Rm91bmRFcnJvcjoKICAgICAgICBsaW5lcyA9IFsi
+aHR0cDpcbiIsICIgIHJvdXRlcnM6IHt9XG4iLCAiICBzZXJ2aWNlczoge31cbiJdCgogICAgcm91
+dGVyc19zdGFydCwgc2VydmljZXNfc3RhcnQgPSBnZXRfc2VjdGlvbl9ib3VuZGFyaWVzKGxpbmVz
+KQoKICAgICMgQ2hlY2sgZHVwbGljYXRlCiAgICByb3V0ZXJzID0gZmluZF9lbnRyaWVzKGxpbmVz
+LCByb3V0ZXJzX3N0YXJ0KQogICAgaWYgbmFtZSBpbiByb3V0ZXJzOgogICAgICAgIHByaW50KGYi
+W2Vhc3lnYXRlXSDmnI3liqEge25hbWV9IOW3suWtmOWcqCIsIGZpbGU9c3lzLnN0ZGVycikKICAg
+ICAgICBzeXMuZXhpdCgxKQoKICAgICMgRml4ICJ7fSIgcGxhY2Vob2xkZXJzCiAgICBmb3IgaSwg
+bGluZSBpbiBlbnVtZXJhdGUobGluZXMpOgogICAgICAgIGlmIGxpbmUucnN0cmlwKCkgPT0gIiAg
+cm91dGVyczoge30iOgogICAgICAgICAgICBsaW5lc1tpXSA9ICIgIHJvdXRlcnM6XG4iCiAgICAg
+ICAgZWxpZiBsaW5lLnJzdHJpcCgpID09ICIgIHNlcnZpY2VzOiB7fSI6CiAgICAgICAgICAgIGxp
+bmVzW2ldID0gIiAgc2VydmljZXM6XG4iCgogICAgcm91dGVyX2Jsb2NrID0gWwogICAgICAgIGYi
+ICAgIHtuYW1lfTpcbiIsCiAgICAgICAgZiIgICAgICBydWxlOiBIb3N0KGB7aG9zdH1gKVxuIiwK
+ICAgICAgICBmIiAgICAgIGVudHJ5UG9pbnRzOlxuIiwKICAgICAgICBmIiAgICAgICAgLSB3ZWJc
+biIsCiAgICAgICAgZiIgICAgICBzZXJ2aWNlOiB7bmFtZX1cbiIsCiAgICBdCiAgICBzZXJ2aWNl
+X2Jsb2NrID0gWwogICAgICAgIGYiICAgIHtuYW1lfTpcbiIsCiAgICAgICAgZiIgICAgICBsb2Fk
+QmFsYW5jZXI6XG4iLAogICAgICAgIGYiICAgICAgICBzZXJ2ZXJzOlxuIiwKICAgICAgICBmIiAg
+ICAgICAgICAtIHVybDoge3VybH1cbiIsCiAgICBdCgogICAgcm91dGVyc19zdGFydCwgc2Vydmlj
+ZXNfc3RhcnQgPSBnZXRfc2VjdGlvbl9ib3VuZGFyaWVzKGxpbmVzKQoKICAgIGlmIHNlcnZpY2Vz
+X3N0YXJ0ID49IDA6CiAgICAgICAgIyBJbnNlcnQgcm91dGVyIGJlZm9yZSBzZXJ2aWNlcyBzZWN0
+aW9uCiAgICAgICAgZm9yIGl0ZW0gaW4gcmV2ZXJzZWQocm91dGVyX2Jsb2NrKToKICAgICAgICAg
+ICAgbGluZXMuaW5zZXJ0KHNlcnZpY2VzX3N0YXJ0LCBpdGVtKQogICAgICAgICMgSW5zZXJ0IHNl
+cnZpY2UgYXQgZW5kIG9mIHNlcnZpY2VzIHNlY3Rpb24KICAgICAgICByb3V0ZXJzX3N0YXJ0LCBz
+ZXJ2aWNlc19zdGFydCA9IGdldF9zZWN0aW9uX2JvdW5kYXJpZXMobGluZXMpCiAgICAgICAgaiA9
+IHNlcnZpY2VzX3N0YXJ0ICsgMQogICAgICAgIHdoaWxlIGogPCBsZW4obGluZXMpIGFuZCAoZ2V0
+X2luZGVudChsaW5lc1tqXSkgPj0gNCBvciBub3QgbGluZXNbal0uc3RyaXAoKSk6CiAgICAgICAg
+ICAgIGogKz0gMQogICAgICAgIGZvciBpdGVtIGluIHJldmVyc2VkKHNlcnZpY2VfYmxvY2spOgog
+ICAgICAgICAgICBsaW5lcy5pbnNlcnQoaiwgaXRlbSkKICAgIGVsc2U6CiAgICAgICAgbGluZXMu
+YXBwZW5kKCJcbiIpCiAgICAgICAgbGluZXMuZXh0ZW5kKHJvdXRlcl9ibG9jaykKICAgICAgICBs
+aW5lcy5hcHBlbmQoIiAgc2VydmljZXM6XG4iKQogICAgICAgIGxpbmVzLmV4dGVuZChzZXJ2aWNl
+X2Jsb2NrKQoKICAgIHdpdGggb3BlbihwYXRoLCAidyIpIGFzIGY6CiAgICAgICAgZi53cml0ZWxp
+bmVzKGxpbmVzKQogICAgcHJpbnQoZiJbZWFzeWdhdGVdIOW3sua3u+WKoOacjeWKoe+8mntuYW1l
+fSDihpIge2hvc3R9IOKGkiB7dXJsfSIpCgoKZGVmIHJlbW92ZV9zZXJ2aWNlKHBhdGgsIG5hbWUp
+OgogICAgd2l0aCBvcGVuKHBhdGgpIGFzIGY6CiAgICAgICAgbGluZXMgPSBmLnJlYWRsaW5lcygp
+CgogICAgcm91dGVyc19zdGFydCwgc2VydmljZXNfc3RhcnQgPSBnZXRfc2VjdGlvbl9ib3VuZGFy
+aWVzKGxpbmVzKQogICAgcm91dGVycyA9IGZpbmRfZW50cmllcyhsaW5lcywgcm91dGVyc19zdGFy
+dCkKICAgIHNlcnZpY2VzID0gZmluZF9lbnRyaWVzKGxpbmVzLCBzZXJ2aWNlc19zdGFydCkKCiAg
+ICByZW1vdmVkID0gRmFsc2UKCiAgICAjIFJlbW92ZSBmcm9tIHJvdXRlcnMgc2VjdGlvbgogICAg
+aWYgbmFtZSBpbiByb3V0ZXJzOgogICAgICAgIHN0YXJ0LCBlbmQgPSByb3V0ZXJzW25hbWVdCiAg
+ICAgICAgIyBSZW1vdmUgbGluZXMgaW5jbHVkaW5nIGFueSB0cmFpbGluZyBibGFuayBsaW5lCiAg
+ICAgICAgd2hpbGUgZW5kIDwgbGVuKGxpbmVzKSBhbmQgbm90IGxpbmVzW2VuZF0uc3RyaXAoKToK
+ICAgICAgICAgICAgZW5kICs9IDEKICAgICAgICBmb3IgaSBpbiByYW5nZShlbmQgLSAxLCBzdGFy
+dCAtIDEsIC0xKToKICAgICAgICAgICAgZGVsIGxpbmVzW2ldCiAgICAgICAgcmVtb3ZlZCA9IFRy
+dWUKCiAgICAjIFJlbW92ZSBmcm9tIHNlcnZpY2VzIHNlY3Rpb24KICAgIHJvdXRlcnNfc3RhcnQs
+IHNlcnZpY2VzX3N0YXJ0ID0gZ2V0X3NlY3Rpb25fYm91bmRhcmllcyhsaW5lcykKICAgIHNlcnZp
+Y2VzID0gZmluZF9lbnRyaWVzKGxpbmVzLCBzZXJ2aWNlc19zdGFydCkKICAgIGlmIG5hbWUgaW4g
+c2VydmljZXM6CiAgICAgICAgc3RhcnQsIGVuZCA9IHNlcnZpY2VzW25hbWVdCiAgICAgICAgd2hp
+bGUgZW5kIDwgbGVuKGxpbmVzKSBhbmQgbm90IGxpbmVzW2VuZF0uc3RyaXAoKToKICAgICAgICAg
+ICAgZW5kICs9IDEKICAgICAgICBmb3IgaSBpbiByYW5nZShlbmQgLSAxLCBzdGFydCAtIDEsIC0x
+KToKICAgICAgICAgICAgZGVsIGxpbmVzW2ldCiAgICAgICAgcmVtb3ZlZCA9IFRydWUKCiAgICBp
+ZiBub3QgcmVtb3ZlZDoKICAgICAgICBwcmludChmIltlYXN5Z2F0ZV0g5pyq5om+5Yiw5pyN5Yqh
+77yae25hbWV9IiwgZmlsZT1zeXMuc3RkZXJyKQogICAgICAgIHN5cy5leGl0KDApCgogICAgd2l0
+aCBvcGVuKHBhdGgsICJ3IikgYXMgZjoKICAgICAgICBmLndyaXRlbGluZXMobGluZXMpCiAgICBw
+cmludChmIltlYXN5Z2F0ZV0g5bey5Yig6Zmk5pyN5Yqh77yae25hbWV9IikKCgppZiBfX25hbWVf
+XyA9PSAiX19tYWluX18iOgogICAgY21kID0gc3lzLmFyZ3ZbMV0KICAgIGlmIGNtZCA9PSAiYWRk
+IjoKICAgICAgICBhZGRfc2VydmljZShzeXMuYXJndlsyXSwgc3lzLmFyZ3ZbM10sIHN5cy5hcmd2
+WzRdLCBzeXMuYXJndls1XSkKICAgIGVsaWYgY21kID09ICJyZW1vdmUiOgogICAgICAgIHJlbW92
+ZV9zZXJ2aWNlKHN5cy5hcmd2WzJdLCBzeXMuYXJndlszXSkKICAgIGVsaWYgY21kID09ICJsaXN0
+IjoKICAgICAgICBsaXN0X3NlcnZpY2VzKHN5cy5hcmd2WzJdKQogICAgZWxzZToKICAgICAgICBw
+cmludChmIlVua25vd24gY29tbWFuZDoge2NtZH0iLCBmaWxlPXN5cy5zdGRlcnIpCiAgICAgICAg
+c3lzLmV4aXQoMSkK
+EOF_B64
+  chmod +x "$target"
 }
 
 # 获取 service helper 路径（优先运行时，fallback 源码）
@@ -859,11 +976,19 @@ _service_helper() {
   local helper="${EASYGATE_HOME}/lib/service-helper.py"
   if [[ -f "$helper" ]]; then
     printf '%s' "$helper"
-  elif [[ -f "${SCRIPT_DIR:-${0%/*}}/service-helper.py" ]]; then
-    printf '%s' "${SCRIPT_DIR:-${0%/*}}/service-helper.py"
-  else
-    return 1
+    return
   fi
+  if [[ -f "${SCRIPT_DIR:-${0%/*}}/service-helper.py" ]]; then
+    printf '%s' "${SCRIPT_DIR:-${0%/*}}/service-helper.py"
+    return
+  fi
+  # 内嵌 base64 还未被提取过，现在提取
+  install_service_helper
+  if [[ -f "$helper" ]]; then
+    printf '%s' "$helper"
+    return
+  fi
+  return 1
 }
 
 write_native_demo_server() {
@@ -1403,15 +1528,16 @@ unregister_native_services() {
 
 _service_yaml_path() {
   local mode
-  mode="$(detect_mode)"
+  mode="$(detect_mode)" 2>/dev/null || true
   case "$mode" in
     compose) printf '%s/traefik/dynamic/localhost-services.yml' "$EASYGATE_HOME" ;;
     native)  printf '%s/native/dynamic/services.yml' "$EASYGATE_HOME" ;;
-    *) error "未找到已部署的服务"; return 1 ;;
+    *) printf '%s/native/dynamic/services.yml' "$EASYGATE_HOME"; return 0 ;;
   esac
 }
 
 service_add() {
+  install_service_helper 2>/dev/null || true
   local name="" host="" url=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -1426,31 +1552,33 @@ service_add() {
   [[ -z "$host" ]] && { error "缺少 --host（访问域名，如 app.example.com）"; return 1; }
   [[ -z "$url" ]] && { error "缺少 --url（上游地址，如 http://192.168.1.100:8080）"; return 1; }
 
-  local yaml_file
+  local yaml_file helper
   yaml_file="$(_service_yaml_path)" || return 1
   mkdir -p "$(dirname "$yaml_file")"
-  local helper; helper="$(_service_helper)" || { error "service-helper.py 不可用"; return 1; }
+  helper="$(_service_helper)" || { error "service-helper.py 不可用"; return 1; }
   python3 "$helper" add "$yaml_file" "$name" "$host" "$url"
 }
 
 service_remove() {
+  install_service_helper 2>/dev/null || true
   local name="${1:-}"
   [[ -z "$name" ]] && { error "用法：easygate service remove <name>"; return 1; }
-  local yaml_file
+  local yaml_file helper
   yaml_file="$(_service_yaml_path)" || return 1
   [[ ! -f "$yaml_file" ]] && { warn "服务配置文件不存在：${yaml_file}"; return 0; }
-  local helper; helper="$(_service_helper)" || { error "service-helper.py 不可用"; return 1; }
+  helper="$(_service_helper)" || { error "service-helper.py 不可用"; return 1; }
   python3 "$helper" remove "$yaml_file" "$name"
 }
 
 service_list() {
-  local yaml_file
+  install_service_helper 2>/dev/null || true
+  local yaml_file helper
   yaml_file="$(_service_yaml_path)" 2>/dev/null || yaml_file=""
   if [[ -z "$yaml_file" || ! -f "$yaml_file" ]]; then
     info "暂无已配置的服务"
     return 0
   fi
-  local helper; helper="$(_service_helper)" || { error "service-helper.py 不可用"; return 1; }
+  helper="$(_service_helper)" || { error "service-helper.py 不可用"; return 1; }
   python3 "$helper" list "$yaml_file"
 }
 
