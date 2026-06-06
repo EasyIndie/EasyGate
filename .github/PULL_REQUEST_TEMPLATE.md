@@ -17,7 +17,7 @@
 - [ ] `make behavior-test` passes
 - [ ] Bash and PowerShell versions are both updated (if applicable)
 - [ ] Documentation is updated (if applicable)
-- [ ] CHANGELOG.md entry added in [Unreleased] section (if user-facing)
+- [ ] Significant user-facing changes documented in commit message body
 
 ## Test plan
 
