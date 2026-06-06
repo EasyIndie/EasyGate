@@ -6,15 +6,15 @@ set -euo pipefail
 # single file to EASYGATE_HOME/bin/.  When modifying shared utilities,
 # please also update scripts/lib.sh (the canonical source).
 
-# Resolve version from environment, git tag, or fall back to "dev".
-if [[ -z "${EASYGATE_VERSION:-}" ]]; then
-  if command -v git >/dev/null 2>&1 && git -C "${0%/*}/.." rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    VERSION="$(git -C "${0%/*}/.." describe --tags --always --dirty 2>/dev/null || echo "dev")"
-  else
-    VERSION="dev"
-  fi
-else
+# Resolve version from environment, git tag, version file, or fall back to "dev".
+if [[ -n "${EASYGATE_VERSION:-}" ]]; then
   VERSION="$EASYGATE_VERSION"
+elif command -v git >/dev/null 2>&1 && git -C "${0%/*}/.." rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  VERSION="$(git -C "${0%/*}/.." describe --tags --always --dirty 2>/dev/null || echo "dev")"
+elif [[ -f "${EASYGATE_HOME}/.version" ]]; then
+  VERSION="$(cat "${EASYGATE_HOME}/.version")"
+else
+  VERSION="dev"
 fi
 
 default_easygate_home() {

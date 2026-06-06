@@ -38,8 +38,10 @@ jobs:
           # install.sh —— 嵌入 easygate CLI 的 SHA256 校验和
           # 用户通过 curl|bash 安装时自动验证下载文件完整性
           cp scripts/install.sh dist/install.sh
-          # 安装后 easygate version 显示 release 版本号
-          sed -i "s|exec \"\$TARGET\" \"\$@\"|EASYGATE_VERSION=\"${TAG_NAME}\" exec \"\$TARGET\" \"\$@\"|" dist/install.sh
+          # 写入版本文件到 install.sh 末尾
+          cat >> dist/install.sh << EOF_VER
+          printf '%s' '${TAG_NAME}' > "\${EASYGATE_HOME}/.version"
+          EOF_VER
           CHECKSUM=$(shasum -a 256 dist/easygate | awk '{print $1}')
           # 替换整行变量赋值，__SKIP__ 保留在条件判断中不被触及
           sed -i "s/^EASYGATE_CLI_CHECKSUM=.*/EASYGATE_CLI_CHECKSUM=\"${CHECKSUM}\"/" dist/install.sh
