@@ -370,37 +370,36 @@ prepare_tunnel_credentials() {
   local target="${EASYGATE_HOME}/cloudflared/${tunnel_name}.json"
   local before_credentials after_credentials credentials_source credentials_tmp
 
+  # 凭据已存在时验证其可用性
   if [[ -f "$target" ]]; then
-    info "复用已有 tunnel 凭据：${target}"
-    # 验证凭据仍然有效（tunnel 未被删除或凭据未过期）
-    cloudflared tunnel info "$tunnel_name" >/dev/null 2>&1 && return || true
-    warn "tunnel ${tunnel_name} 凭据已失效，将重新创建"
+    local tmp_config="${EASYGATE_HOME}/cloudflared/.verify-${tunnel_name}.yml"
+    printf 'tunnel: %s\ncredentials-file: %s\n' "$tunnel_name" "$target" > "$tmp_config"
+    if cloudflared tunnel --config "$tmp_config" info "$tunnel_name" >/dev/null 2>&1; then
+      rm -f "$tmp_config"
+      info "复用已有 tunnel 凭据：${target}"
+      return
+    fi
+    rm -f "$tmp_config"
+    warn "tunnel 凭据验证失败，将删除并重建 tunnel"
     cloudflared tunnel delete "$tunnel_name" >/dev/null 2>&1 || true
     rm -f "$target"
   fi
 
-  before_credentials="$(find_latest_credentials "${CLOUDFLARED_HOME}" || true)"
-
   info "创建 Cloudflare Tunnel：${tunnel_name}"
   if ! cloudflared tunnel create "$tunnel_name"; then
-    warn "创建 tunnel 失败。若 tunnel 已存在，将尝试复用本地最新凭据文件。"
-  fi
-
-  after_credentials="$(find_latest_credentials "${CLOUDFLARED_HOME}" || true)"
-  credentials_source="${after_credentials:-$before_credentials}"
-
-  if [[ -z "$credentials_source" || ! -f "$credentials_source" ]]; then
-    warn "未找到 tunnel 凭据，尝试删除并重建 tunnel"
+    warn "tunnel ${tunnel_name} 已存在或创建失败，尝试删除后重建"
     cloudflared tunnel delete "$tunnel_name" >/dev/null 2>&1 || true
     if ! cloudflared tunnel create "$tunnel_name"; then
       error "创建 tunnel 失败，请检查 Cloudflare 登录状态"
       exit 1
     fi
-    credentials_source="$(find_latest_credentials "${CLOUDFLARED_HOME}" || true)"
-    if [[ -z "$credentials_source" || ! -f "$credentials_source" ]]; then
-      error "创建 tunnel 后仍未找到凭据文件"
-      exit 1
-    fi
+  fi
+
+  credentials_source="$(find_latest_credentials "${CLOUDFLARED_HOME}" || true)"
+
+  if [[ -z "$credentials_source" || ! -f "$credentials_source" ]]; then
+    error "创建 tunnel 后未找到凭据文件"
+    exit 1
   fi
 
   credentials_tmp="$(mktemp "${EASYGATE_HOME}/cloudflared/${tunnel_name}.json.XXXXXX")"
