@@ -1198,32 +1198,23 @@ start_native_services() {
 }
 
 stop_native_services() {
-  # 优先使用系统服务管理器停止
+  # 通过系统服务管理器停止
   case "$(uname -s)" in
     Darwin)
-      local traefik_plist="${HOME}/Library/LaunchAgents/com.easygate.native-traefik.plist"
-      if [[ -f "$traefik_plist" ]] && command -v launchctl >/dev/null 2>&1; then
-        info "通过 launchd 停止服务"
-        launchctl unload "$traefik_plist" >/dev/null 2>&1 || true
+      if command -v launchctl >/dev/null 2>&1; then
+        launchctl unload "${HOME}/Library/LaunchAgents/com.easygate.native-traefik.plist" >/dev/null 2>&1 || true
         launchctl unload "${HOME}/Library/LaunchAgents/com.easygate.native-cloudflared.plist" >/dev/null 2>&1 || true
-        # 清理 PID 文件
-        rm -f "${EASYGATE_HOME}/run/native-traefik.pid" "${EASYGATE_HOME}/run/native-cloudflared.pid"
-        return
       fi
       ;;
     Linux)
-      local traefik_unit="${HOME}/.config/systemd/user/easygate-traefik.service"
-      if [[ -f "$traefik_unit" ]] && command -v systemctl >/dev/null 2>&1; then
-        info "通过 systemd 停止服务"
+      if command -v systemctl >/dev/null 2>&1; then
         systemctl --user stop "easygate-traefik.service" "easygate-cloudflared.service" >/dev/null 2>&1 || true
         systemctl --user reset-failed "easygate-traefik.service" "easygate-cloudflared.service" >/dev/null 2>&1 || true
-        rm -f "${EASYGATE_HOME}/run/native-traefik.pid" "${EASYGATE_HOME}/run/native-cloudflared.pid"
-        return
       fi
       ;;
   esac
 
-  # 无系统服务时 fallback 到 PID kill
+  # 同时通过 PID 文件终止所有 nohup 进程（兜底）
   for pid_file in \
     "${EASYGATE_HOME}/run/native-cloudflared.pid" \
     "${EASYGATE_HOME}/run/native-traefik.pid" \
