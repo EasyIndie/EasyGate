@@ -74,12 +74,6 @@ EOF_DOCKER
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'cloudflared %s\n' "$*" >> "${EASYGATE_MOCK_LOG}"
-if [[ "${1:-}" == "--version" ]]; then
-  exit 0
-fi
-if [[ "${1:-}" == "tunnel" && "${2:-}" == "create" ]]; then
-  exit 1
-fi
 exit 0
 EOF_CLOUDFLARED
 

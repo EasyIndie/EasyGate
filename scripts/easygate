@@ -387,12 +387,9 @@ prepare_tunnel_credentials() {
 
   info "创建 Cloudflare Tunnel：${tunnel_name}"
   if ! cloudflared tunnel create "$tunnel_name"; then
-    warn "tunnel ${tunnel_name} 已存在或创建失败，尝试删除后重建"
+    warn "tunnel ${tunnel_name} 已存在，先删除再重建以获取新凭据"
     cloudflared tunnel delete "$tunnel_name" >/dev/null 2>&1 || true
-    if ! cloudflared tunnel create "$tunnel_name"; then
-      error "创建 tunnel 失败，请检查 Cloudflare 登录状态"
-      exit 1
-    fi
+    cloudflared tunnel create "$tunnel_name" >/dev/null 2>&1 || warn "重建 tunnel 失败，将尝试复用已有凭据"
   fi
 
   credentials_source="$(find_latest_credentials "${CLOUDFLARED_HOME}" || true)"
