@@ -165,10 +165,6 @@ if ($EasyGateSh -notmatch "traefik_v") {
 if ($LocalNativePs -notmatch "EASYGATE_CLI") {
   Fail "local-acceptance-native.ps1 缺少独立 CLI 覆盖入口"
 }
-}
-}
-}
-}
 
 Write-Info "检查 GitHub Actions Node 24 兼容配置"
 $WorkflowText = Get-Content -Raw ".github/workflows/ci.yml"
