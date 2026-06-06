@@ -893,6 +893,8 @@ function Invoke-ServiceHelper {
   if (-not $Python) { Fail "需要 python3 或 python" }
   & $Python.Source $Helper @Args
 }
+
+function Start-ServiceAdd {
   param([string[]]$Args)
   $Name = $Host = $Url = $null
   for ($i = 0; $i -lt $Args.Count; $i++) {
