@@ -38,7 +38,7 @@ Mock 二进制（docker、cloudflared、traefik）隔离真实环境，不需要
 | `--skip-route` | 跳过 DNS 路由 |
 | `--demo` | demo 正常启动 |
 | 清理保留配置 | stop 不删配置和凭据 |
-| 清理 purge | purge + 确认 yes 后删除全部数据 |
+| 清理 uninstall | uninstall 删除全部数据 + 清理 PATH |
 | 清理命令检查 | compose 命令不含 `--profile` |
 | 原生部署 | file provider 配置 + 进程启动 |
 | 模式互斥 | compose 和 native 双向阻止 |

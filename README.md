@@ -92,8 +92,7 @@ easygate ps                 # 查看状态
 easygate logs               # 查看日志
 easygate demo start         # 启动 demo 测试服务
 easygate demo stop          # 停止 demo
-easygate purge              # 删除全部本地数据
-easygate uninstall          # 卸载 CLI
+easygate uninstall          # 停止服务 + 删除全部数据 + 清理 PATH
 ```
 
 ## 参考文档

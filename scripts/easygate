@@ -55,8 +55,7 @@ usage() {
   easygate start|stop|restart      服务管理
   easygate ps|logs|config          状态与日志
   easygate demo start|stop|restart Demo 服务
-  easygate purge                   删除全部本地数据
-  easygate uninstall               卸载 CLI
+  easygate uninstall               停止服务 + 删除所有数据 + 清理 PATH
   easygate home|version            信息查询
 
 常用选项：
@@ -1140,36 +1139,6 @@ unregister_native_services() {
   esac
 }
 
-purge_services() {
-  warn "即将删除运行时目录 ${EASYGATE_HOME}，包括本地配置、二进制和 tunnel 凭据。"
-  warn "该操作不会删除 Cloudflare 上的 DNS 记录或 tunnel。"
-  local confirm="${EASYGATE_CONFIRM_PURGE:-}"
-  if [[ -z "$confirm" ]]; then
-    read -r -p "确认继续？输入 yes: " confirm
-  fi
-  [[ "$confirm" == "yes" ]] || { warn "已取消清理"; return; }
-
-  local mode
-  mode="$(detect_mode)"
-  case "$mode" in
-    compose)
-      if [[ -f "$COMPOSE_FILE" && -f "$COMPOSE_ENV" ]]; then
-        docker compose -p easygate -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV" down --remove-orphans >/dev/null 2>&1 || true
-      fi
-      ;;
-    native)
-      stop_native_services
-      unregister_native_services
-      ;;
-  esac
-
-  if [[ -e "$EASYGATE_HOME" ]]; then
-    rm -rf "$EASYGATE_HOME"
-    info "已删除 ${EASYGATE_HOME}"
-  fi
-  info "清理完成。Cloudflare 侧资源如需删除，请使用 cloudflared CLI 或 Cloudflare Dashboard 手动处理。"
-}
-
 show_status() {
   local mode
   mode="$(detect_mode)"
@@ -1203,7 +1172,6 @@ case "$cmd" in
   start) start_services "$@" ;;
   stop) stop_services "$@" ;;
   restart) restart_services "$@" ;;
-  purge) purge_services "$@" ;;
   ps|status) show_status "$@" ;;
   logs) native_logs 2>/dev/null; compose logs -f traefik cloudflared "$@" 2>/dev/null || true ;;
   config) compose config "$@" ;;
@@ -1242,12 +1210,11 @@ case "$cmd" in
         info "已从 ${rc} 移除 EasyGate PATH 配置"
       fi
     done
-    TARGET="${EASYGATE_HOME}/bin/easygate"
-    if [[ -f "$TARGET" ]]; then
-      rm -f "$TARGET"
-      info "已删除 CLI：${TARGET}"
+    if [[ -e "$EASYGATE_HOME" ]]; then
+      rm -rf "$EASYGATE_HOME"
+      info "已删除运行时目录 ${EASYGATE_HOME}"
     fi
-    info "卸载完成"
+    info "卸载完成。Cloudflare 侧资源如需删除，请使用 cloudflared CLI 或 Cloudflare Dashboard 手动处理。"
     ;;
   native)
     subcmd="${1:-}"

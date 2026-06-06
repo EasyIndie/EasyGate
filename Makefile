@@ -28,7 +28,7 @@ help:
 	@echo "服务管理 (安装后使用 easygate CLI):"
 	@echo "  easygate start / stop / restart"
 	@echo "  easygate demo start / stop / restart"
-	@echo "  easygate ps / logs / purge / uninstall"
+	@echo "  easygate ps / logs / uninstall"
 	@echo ""
 
 # ── Install ───────────────────────────────────────────────────────────

@@ -748,36 +748,17 @@ function Restart-Services {
   Write-Info "服务已重启"
 }
 
-function Invoke-Purge {
-  Write-Warn "即将删除运行时目录 ${EasyGateHome}，包括本地配置、二进制和 tunnel 凭据。该操作不会删除 Cloudflare 上的 DNS 记录或 tunnel。"
-  $Confirm = if ([string]::IsNullOrWhiteSpace($env:EASYGATE_CONFIRM_PURGE)) {
-    Read-Host "确认继续？输入 yes"
-  } else { $env:EASYGATE_CONFIRM_PURGE }
-  if ($Confirm -ne "yes") {
-    Write-Warn "已取消清理"
-    return
-  }
-  # Stop compose services
+function Invoke-Uninstall {
+  # Stop services if any are running
   if ((Test-Path $ComposeFile) -and (Test-Path $ComposeEnv) -and (Get-Command docker -ErrorAction SilentlyContinue)) {
     try { Invoke-EasyGateCompose down --remove-orphans } catch { }
   }
+  # Delete all local data
   if (Test-Path $EasyGateHome) {
     Remove-Item -Recurse -Force $EasyGateHome
-    Write-Info "已删除 ${EasyGateHome}"
+    Write-Info "已删除运行时目录 ${EasyGateHome}"
   }
-  Write-Info "清理完成。Cloudflare 侧资源如需删除，请使用 cloudflared CLI 或 Cloudflare Dashboard 手动处理。"
-}
-
-function Invoke-Uninstall {
-  # Stop services if any are running
-  try { Invoke-EasyGateCompose down --remove-orphans } catch { Write-Warn "停止服务失败（可能未部署）" }
-  # Clean PATH from shell config (Windows does not auto-add PATH)
-  $Target = Join-Path $EasyGateHome "bin\easygate.ps1"
-  if (Test-Path $Target) {
-    Remove-Item $Target -Force
-    Write-Info "已删除 CLI：${Target}"
-  }
-  Write-Info "卸载完成"
+  Write-Info "卸载完成。Cloudflare 侧资源如需删除，请使用 cloudflared CLI 或 Cloudflare Dashboard 手动处理。"
 }
 
 # 手动解析子命令，避免 PS7 参数绑定问题
@@ -806,7 +787,6 @@ switch ($Command) {
   "start" { Start-Services }
   "stop" { Stop-Services }
   "restart" { Restart-Services }
-  "purge" { Invoke-Purge }
   "ps" { Invoke-EasyGateCompose ps }
   "logs" { Invoke-EasyGateCompose logs -f traefik cloudflared }
   "config" { Invoke-EasyGateCompose config }
