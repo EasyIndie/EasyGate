@@ -8,7 +8,10 @@ set -euo pipefail
 
 # Resolve version from git tag, environment, or fall back to "dev".
 if [[ -z "${EASYGATE_VERSION:-}" ]]; then
-  if command -v git >/dev/null 2>&1 && git -C "${0%/*}/.." rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  # Release 构建时由 release.yml 嵌入版本号
+  if [[ -n "${EASYGATE_RELEASE_VERSION:-}" && "${EASYGATE_RELEASE_VERSION}" != "__RELEASE_VERSION__" ]]; then
+    VERSION="${EASYGATE_RELEASE_VERSION}"
+  elif command -v git >/dev/null 2>&1 && git -C "${0%/*}/.." rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     VERSION="$(git -C "${0%/*}/.." describe --tags --always --dirty 2>/dev/null || echo "dev")"
   else
     VERSION="dev"
@@ -16,6 +19,8 @@ if [[ -z "${EASYGATE_VERSION:-}" ]]; then
 else
   VERSION="$EASYGATE_VERSION"
 fi
+
+EASYGATE_RELEASE_VERSION="__RELEASE_VERSION__"
 
 default_easygate_home() {
   if [[ -n "${EASYGATE_HOME:-}" ]]; then
@@ -1685,7 +1690,28 @@ case "$cmd" in
     case "$mode" in
       compose) compose logs -f traefik cloudflared "$@" ;;
       native)
-        tail -f "${EASYGATE_HOME}/logs/native-traefik.log" "${EASYGATE_HOME}/logs/native-cloudflared.log" "$@"
+        case "$(uname -s)" in
+          Linux)
+            # systemd 管理的服务日志在 journald 中，不在文件里
+            if command -v journalctl >/dev/null 2>&1 && systemctl --user is-active easygate-traefik.service >/dev/null 2>&1; then
+              journalctl --user -u easygate-traefik.service -u easygate-cloudflared.service -f "$@"
+            else
+              tail -f "${EASYGATE_HOME}/logs/native-traefik.log" "${EASYGATE_HOME}/logs/native-cloudflared.log" "$@" 2>/dev/null || {
+                error "日志文件不存在。若使用 systemd，请用 journalctl --user -u easygate-traefik -f 查看"
+                exit 1
+              }
+            fi
+            ;;
+          *)
+            if [[ -f "${EASYGATE_HOME}/logs/native-traefik.log" ]]; then
+              tail -f "${EASYGATE_HOME}/logs/native-traefik.log" "${EASYGATE_HOME}/logs/native-cloudflared.log" "$@"
+            else
+              error "日志文件不存在：${EASYGATE_HOME}/logs/"
+              info "请确认服务已部署并启动：easygate deploy --native ... && easygate start"
+              exit 1
+            fi
+            ;;
+        esac
         ;;
       *) error "未找到已部署的服务，请先执行 easygate deploy" ; exit 1 ;;
     esac
