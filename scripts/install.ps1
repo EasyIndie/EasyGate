@@ -1,6 +1,4 @@
 param(
-  [Parameter(ValueFromRemainingArguments = $true)]
-  [string[]]$CommandArgs,
   [string]$Domain,
   [string]$Tunnel,
   [string]$Dashboard,
@@ -14,6 +12,8 @@ param(
   [switch]$NoInstallTraefik,
   [switch]$Purge
 )
+
+$CommandArgs = @($args)
 
 $ErrorActionPreference = "Stop"
 

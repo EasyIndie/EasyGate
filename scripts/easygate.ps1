@@ -10,12 +10,12 @@ param(
   [switch]$LocalOnly,
   [switch]$NoInstallCloudflared,
   [switch]$NoInstallTraefik,
-  [switch]$Purge,
-  # ValueFromRemainingArguments 必须在 param 块最后位置，
-  # 否则 PS7 中无法正确捕获位置子命令（如 deploy）。
-  [Parameter(ValueFromRemainingArguments = $true)]
-  [string[]]$CommandArgs
+  [switch]$Purge
 )
+
+# $args 捕获未绑定命名参数的位置参数（如子命令 deploy/cleanup）。
+# 不使用 ValueFromRemainingArguments 以避免 PS7 兼容性问题。
+$CommandArgs = @($args)
 
 $ErrorActionPreference = "Stop"
 $Version = if ([string]::IsNullOrWhiteSpace($env:EASYGATE_VERSION)) { "dev" } else { $env:EASYGATE_VERSION }
