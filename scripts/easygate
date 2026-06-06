@@ -1101,28 +1101,32 @@ start_native_services() {
 }
 
 stop_native_services() {
-  # 通过服务管理器停止进程（保留注册，start 可恢复）
+  local stopped_by_service=false
+  # 通过服务管理器停止进程，防止 Restart=on-failure 自动拉起
   case "$(uname -s)" in
     Linux)
-      if command -v systemctl >/dev/null 2>&1; then
-        systemctl --user stop "easygate-traefik.service" "easygate-cloudflared.service" >/dev/null 2>&1 || true
+      if systemctl --user is-active easygate-traefik.service >/dev/null 2>&1; then
+        systemctl --user stop "easygate-traefik.service" "easygate-cloudflared.service" >/dev/null 2>&1 && stopped_by_service=true
       fi
       ;;
     Darwin)
-      if command -v launchctl >/dev/null 2>&1; then
+      if launchctl list 2>/dev/null | grep -q "com.easygate.native-traefik"; then
         launchctl stop "com.easygate.native-traefik" >/dev/null 2>&1 || true
         launchctl stop "com.easygate.native-cloudflared" >/dev/null 2>&1 || true
+        stopped_by_service=true
       fi
       ;;
   esac
-  # 始终通过 PID 文件 kill 进程（兼容无服务注册的场景）
-  for pid_file in \
-    "${EASYGATE_HOME}/run/native-cloudflared.pid" \
-    "${EASYGATE_HOME}/run/native-traefik.pid" \
-    "${EASYGATE_HOME}/run/native-demo-api.pid" \
-    "${EASYGATE_HOME}/run/native-demo-test-api.pid"; do
-    stop_pid_file "$pid_file"
-  done
+  # 未通过服务管理器停止时，通过 PID 文件 kill 进程
+  if [[ "$stopped_by_service" != true ]]; then
+    for pid_file in \
+      "${EASYGATE_HOME}/run/native-cloudflared.pid" \
+      "${EASYGATE_HOME}/run/native-traefik.pid" \
+      "${EASYGATE_HOME}/run/native-demo-api.pid" \
+      "${EASYGATE_HOME}/run/native-demo-test-api.pid"; do
+      stop_pid_file "$pid_file"
+    done
+  fi
 }
 
 # 注销系统服务（purge/uninstall 时调用，彻底清除注册）
