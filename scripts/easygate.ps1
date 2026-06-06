@@ -1,8 +1,17 @@
 # 不使用 param() 以避免 PS7 参数绑定问题。
 # $args 捕获所有原始参数，由函数内部手动解析。
 $CommandArgs = @($args)
-$Command = ""
-$Rest = @()
+
+# 手动解析子命令，避免 PS7 参数绑定问题
+if ($CommandArgs.Count -eq 0) {
+  Show-Usage
+  exit 0
+}
+$Command = $CommandArgs[0]
+$Rest = if ($CommandArgs.Count -gt 1) { $CommandArgs[1..($CommandArgs.Count - 1)] } else { @() }
+
+# 调试：在 CI 中输出收到的参数
+Write-Host "[easygate] DEBUG args count=$($args.Count) cmd=$Command rest=$($Rest -join '|')"
 
 $ErrorActionPreference = "Stop"
 $Version = if ([string]::IsNullOrWhiteSpace($env:EASYGATE_VERSION)) { "dev" } else { $env:EASYGATE_VERSION }
