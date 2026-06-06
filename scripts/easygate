@@ -668,8 +668,12 @@ deploy_compose() {
 
   if [[ "$route_dns" == true ]]; then
     info "创建通配 DNS 路由：*.${base_domain}"
-    if ! cloudflared tunnel route dns "$tunnel_name" "*.${base_domain}"; then
-      warn "自动创建 DNS 路由失败。请在 Cloudflare DNS 中手动添加 *.${base_domain} -> tunnel。"
+    local route_output
+    route_output="$(cloudflared tunnel route dns "$tunnel_name" "*.${base_domain}" 2>&1)" || true
+    if echo "$route_output" | grep -q "already exists"; then
+      warn "DNS 通配路由已存在。若子域名无法访问，请到 Cloudflare DNS 检查是否有独立子域名记录（如 traefik.${base_domain}、api.${base_domain}）覆盖了通配符。"
+    elif ! echo "$route_output" | grep -qE "Added|created"; then
+      warn "自动创建 DNS 路由失败：${route_output}"
     fi
   else
     warn "已跳过 DNS 路由创建"
@@ -786,10 +790,17 @@ stop_pid_file() {
   pid="$(cat "$file" 2>/dev/null || true)"
   if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
     kill "$pid" >/dev/null 2>&1 || true
-    for _ in {1..20}; do
+    # 等待最多 4 秒让进程正常退出
+    local waited
+    for waited in {1..20}; do
       kill -0 "$pid" >/dev/null 2>&1 || break
       sleep 0.2
     done
+    # 超时仍未退出，强制终止
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      kill -9 "$pid" >/dev/null 2>&1 || true
+      sleep 0.5
+    fi
   fi
   rm -f "$file"
 }
@@ -985,8 +996,12 @@ EOF_DEMO
 
     if [[ "$route_dns" == true ]]; then
       info "创建通配 DNS 路由：*.${base_domain}"
-      if ! cloudflared tunnel route dns "$tunnel_name" "*.${base_domain}"; then
-        warn "自动创建 DNS 路由失败。请在 Cloudflare DNS 中手动添加 *.${base_domain} -> tunnel。"
+      local route_output
+      route_output="$(cloudflared tunnel route dns "$tunnel_name" "*.${base_domain}" 2>&1)" || true
+      if echo "$route_output" | grep -q "already exists"; then
+        warn "DNS 通配路由已存在。若子域名无法访问，请到 Cloudflare DNS 检查是否有独立子域名记录（如 traefik.${base_domain}、api.${base_domain}）覆盖了通配符。"
+      elif ! echo "$route_output" | grep -qE "Added|created"; then
+        warn "自动创建 DNS 路由失败：${route_output}"
       fi
     else
       warn "已跳过 DNS 路由创建"
@@ -1147,6 +1162,16 @@ start_native_services() {
   command -v traefik >/dev/null 2>&1 && traefik_bin="$(command -v traefik)"
   command -v cloudflared >/dev/null 2>&1 && cloudflared_bin="$(command -v cloudflared)"
 
+  # 重新加载系统服务以保证开机自启
+  case "$(uname -s)" in
+    Darwin)
+      if command -v launchctl >/dev/null 2>&1; then
+        launchctl load "${HOME}/Library/LaunchAgents/com.easygate.native-traefik.plist" >/dev/null 2>&1 || true
+        launchctl load "${HOME}/Library/LaunchAgents/com.easygate.native-cloudflared.plist" >/dev/null 2>&1 || true
+      fi
+      ;;
+  esac
+
   check_port_available "${TRAEFIK_HTTP_PORT:-18080}" "Traefik 端口" || return 1
   start_process "native-traefik" "$traefik_bin" --configFile="${EASYGATE_HOME}/native/traefik.yml"
   if [[ "${EASYGATE_DEPLOY_MODE:-}" != "local-only" ]]; then
@@ -1155,41 +1180,30 @@ start_native_services() {
 }
 
 stop_native_services() {
-  local stopped_by_service=false
-  local unit_file
-  # 通过服务管理器停止进程，防止 Restart=on-failure 自动拉起
+  # 先通过 PID 文件终止进程
+  for pid_file in \
+    "${EASYGATE_HOME}/run/native-cloudflared.pid" \
+    "${EASYGATE_HOME}/run/native-traefik.pid" \
+    "${EASYGATE_HOME}/run/native-demo-api.pid" \
+    "${EASYGATE_HOME}/run/native-demo-test-api.pid"; do
+    stop_pid_file "$pid_file"
+  done
+
+  # 注销系统服务防止自动重启
   case "$(uname -s)" in
     Linux)
-      unit_file="${HOME}/.config/systemd/user/easygate-traefik.service"
-      if [[ -f "$unit_file" ]] && command -v systemctl >/dev/null 2>&1; then
-        systemctl --user stop "easygate-traefik.service" "easygate-cloudflared.service" >/dev/null 2>&1 && stopped_by_service=true
-        # 停止成功后重置失败计数器，防止系统重启进程
+      if command -v systemctl >/dev/null 2>&1; then
+        systemctl --user stop "easygate-traefik.service" "easygate-cloudflared.service" >/dev/null 2>&1 || true
         systemctl --user reset-failed "easygate-traefik.service" "easygate-cloudflared.service" >/dev/null 2>&1 || true
-      fi
-      # 服务文件存在但 systemctl 不可用或停止失败 → 删除文件防止重拉
-      if [[ -f "$unit_file" ]] && [[ "$stopped_by_service" != true ]]; then
-        rm -f "$unit_file" "${HOME}/.config/systemd/user/easygate-cloudflared.service" 2>/dev/null || true
       fi
       ;;
     Darwin)
-      unit_file="${HOME}/Library/LaunchAgents/com.easygate.native-traefik.plist"
-      if [[ -f "$unit_file" ]] && command -v launchctl >/dev/null 2>&1; then
-        launchctl stop "com.easygate.native-traefik" >/dev/null 2>&1 || true
-        launchctl stop "com.easygate.native-cloudflared" >/dev/null 2>&1 || true
-        stopped_by_service=true
+      if command -v launchctl >/dev/null 2>&1; then
+        launchctl unload "${HOME}/Library/LaunchAgents/com.easygate.native-traefik.plist" >/dev/null 2>&1 || true
+        launchctl unload "${HOME}/Library/LaunchAgents/com.easygate.native-cloudflared.plist" >/dev/null 2>&1 || true
       fi
       ;;
   esac
-  # 未通过服务管理器停止时，通过 PID 文件 kill 进程
-  if [[ "$stopped_by_service" != true ]]; then
-    for pid_file in \
-      "${EASYGATE_HOME}/run/native-cloudflared.pid" \
-      "${EASYGATE_HOME}/run/native-traefik.pid" \
-      "${EASYGATE_HOME}/run/native-demo-api.pid" \
-      "${EASYGATE_HOME}/run/native-demo-test-api.pid"; do
-      stop_pid_file "$pid_file"
-    done
-  fi
 }
 
 # 原生模式 demo 进程管理

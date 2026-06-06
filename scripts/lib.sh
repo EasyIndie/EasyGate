@@ -328,10 +328,17 @@ stop_pid_file() {
   pid="$(cat "$file" 2>/dev/null || true)"
   if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
     kill "$pid" >/dev/null 2>&1 || true
-    for _ in {1..20}; do
+    # 等待最多 4 秒让进程正常退出
+    local waited
+    for waited in {1..20}; do
       kill -0 "$pid" >/dev/null 2>&1 || break
       sleep 0.2
     done
+    # 超时仍未退出，强制终止
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      kill -9 "$pid" >/dev/null 2>&1 || true
+      sleep 0.5
+    fi
   fi
   rm -f "$file"
 }

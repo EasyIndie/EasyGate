@@ -169,8 +169,11 @@ if [[ "$LOCAL_ONLY" != true ]]; then
 
   if [[ "$ROUTE_DNS" == true ]]; then
     info "创建通配 DNS 路由：*.${BASE_DOMAIN}"
-    if ! cloudflared tunnel route dns "$TUNNEL_NAME" "*.${BASE_DOMAIN}"; then
-      warn "自动创建 DNS 路由失败。请在 Cloudflare DNS 中手动添加 *.${BASE_DOMAIN} -> tunnel。"
+    route_output="$(cloudflared tunnel route dns "$TUNNEL_NAME" "*.${BASE_DOMAIN}" 2>&1)" || true
+    if echo "$route_output" | grep -q "already exists"; then
+      warn "DNS 通配路由已存在。若子域名无法访问，请到 Cloudflare DNS 检查是否有独立子域名记录（如 traefik.${BASE_DOMAIN}、api.${BASE_DOMAIN}）覆盖了通配符。"
+    elif ! echo "$route_output" | grep -qE "Added|created"; then
+      warn "自动创建 DNS 路由失败：${route_output}"
     fi
   else
     warn "已跳过 DNS 路由创建"
