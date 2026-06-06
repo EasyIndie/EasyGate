@@ -107,17 +107,17 @@ function Test-Option {
 }
 
 function Parse-Options {
-  param([string[]]$Args)
+  param([string[]]$OptionArgs)
   $Options = @{}
-  for ($Index = 0; $Index -lt $Args.Count; $Index++) {
-    $Arg = $Args[$Index]
+  for ($Index = 0; $Index -lt $OptionArgs.Count; $Index++) {
+    $Arg = $OptionArgs[$Index]
     switch -Regex ($Arg) {
-      '^--?domain$|^-Domain$' { $Index++; $Options["Domain"] = $Args[$Index]; continue }
-      '^--?tunnel$|^-Tunnel$' { $Index++; $Options["Tunnel"] = $Args[$Index]; continue }
-      '^--?dashboard$|^-Dashboard$' { $Index++; $Options["Dashboard"] = $Args[$Index]; continue }
-      '^--?port$|^-Port$' { $Index++; $Options["Port"] = $Args[$Index]; continue }
-      '^--?api-port$|^-ApiPort$' { $Index++; $Options["ApiPort"] = $Args[$Index]; continue }
-      '^--?test-api-port$|^-TestApiPort$' { $Index++; $Options["TestApiPort"] = $Args[$Index]; continue }
+      '^--?domain$|^-Domain$' { $Index++; $Options["Domain"] = $OptionArgs[$Index]; continue }
+      '^--?tunnel$|^-Tunnel$' { $Index++; $Options["Tunnel"] = $OptionArgs[$Index]; continue }
+      '^--?dashboard$|^-Dashboard$' { $Index++; $Options["Dashboard"] = $OptionArgs[$Index]; continue }
+      '^--?port$|^-Port$' { $Index++; $Options["Port"] = $OptionArgs[$Index]; continue }
+      '^--?api-port$|^-ApiPort$' { $Index++; $Options["ApiPort"] = $OptionArgs[$Index]; continue }
+      '^--?test-api-port$|^-TestApiPort$' { $Index++; $Options["TestApiPort"] = $OptionArgs[$Index]; continue }
       '^--?skip-route$|^-SkipRoute$' { $Options["SkipRoute"] = $true; continue }
       '^--?demo$|^-Demo$' { $Options["Demo"] = $true; continue }
       '^--?local-only$|^-LocalOnly$' { $Options["LocalOnly"] = $true; continue }
