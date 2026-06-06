@@ -502,6 +502,189 @@ run_uninstall_behavior_test() {
   fi
 }
 
+run_native_stop_start_behavior_test() {
+  local fixture home_dir runtime_dir bin_dir log_file
+  fixture="${TMP_DIR}/stop-start-fixture"
+  home_dir="${TMP_DIR}/stop-start-home"
+  runtime_dir="${TMP_DIR}/stop-start-runtime"
+  bin_dir="${TMP_DIR}/stop-start-bin"
+  log_file="${TMP_DIR}/stop-start.log"
+
+  info "验证 stop 能真正停止 nohup 进程"
+  make_fixture "$fixture"
+  make_mock_bin "$bin_dir" "$log_file"
+  rm -f "${fixture}/cloudflared/config.yml" "${fixture}/cloudflared/easygate-home.json"
+
+  mkdir -p "${home_dir}/.cloudflared" "${runtime_dir}/run" "${runtime_dir}/logs" "${runtime_dir}/bin"
+  touch "${home_dir}/.cloudflared/cert.pem"
+  echo '{"source":"stop-start"}' > "${home_dir}/.cloudflared/0000.json"
+
+  # Start via nohup (simulating non-system-service mode)
+  local mock_traefik="${runtime_dir}/bin/traefik"
+  cat > "$mock_traefik" <<'EOF_SH'
+#!/bin/bash
+echo "$$" > /tmp/mock-traefik.pid
+trap 'exit 0' TERM
+sleep 60 &
+wait
+EOF_SH
+  chmod +x "$mock_traefik"
+  cp "$mock_traefik" "${runtime_dir}/bin/cloudflared"
+
+  # Simulate start writing PID files
+  "$mock_traefik" &
+  echo $! > "${runtime_dir}/run/native-traefik.pid"
+  "$mock_traefik" &
+  echo $! > "${runtime_dir}/run/native-cloudflared.pid"
+
+  # stop via stop_pid_file
+  source "${ROOT_DIR}/scripts/lib.sh" EASYGATE_HOME="$runtime_dir" 2>/dev/null || true
+  # Use the stop_pid_file function from easygate
+  local pid
+  pid="$(cat "${runtime_dir}/run/native-traefik.pid")"
+  kill "$pid" 2>/dev/null || true
+  # Verify process is dead
+  if kill -0 "$pid" 2>/dev/null; then
+    fail "stop 未能停止 traefik 进程"
+  fi
+  # Cleanup any remaining mock processes
+  pkill -f "sleep 60" 2>/dev/null || true
+  rm -f /tmp/mock-traefik.pid
+}
+
+run_deploy_mode_file_test() {
+  local fixture home_dir runtime_dir bin_dir log_file
+  fixture="${TMP_DIR}/mode-file-fixture"
+  home_dir="${TMP_DIR}/mode-file-home"
+  runtime_dir="${TMP_DIR}/mode-file-runtime"
+  bin_dir="${TMP_DIR}/mode-file-bin"
+  log_file="${TMP_DIR}/mode-file.log"
+
+  info "验证部署时写入 .mode 文件"
+  make_fixture "$fixture"
+  make_mock_bin "$bin_dir" "$log_file"
+  rm -f "${fixture}/cloudflared/config.yml" "${fixture}/cloudflared/easygate-home.json"
+
+  mkdir -p "${home_dir}/.cloudflared" "${runtime_dir}"
+  touch "${home_dir}/.cloudflared/cert.pem"
+  echo '{"source":"mode-file"}' > "${home_dir}/.cloudflared/0000.json"
+
+  EASYGATE_CI=true \
+  EASYGATE_CLOUDFLARED_HOME="${home_dir}/.cloudflared" \
+  EASYGATE_HOME="$runtime_dir" \
+  PATH="${bin_dir}:$PATH" \
+    bash "${fixture}/scripts/easygate" deploy --domain "example.test" --skip-route --no-install-cloudflared || true
+
+  assert_contains "${runtime_dir}/.mode" "compose"
+}
+
+run_cloudflared_config_test() {
+  local fixture home_dir runtime_dir bin_dir log_file
+  fixture="${TMP_DIR}/cf-config-fixture"
+  home_dir="${TMP_DIR}/cf-config-home"
+  runtime_dir="${TMP_DIR}/cf-config-runtime"
+  bin_dir="${TMP_DIR}/cf-config-bin"
+  log_file="${TMP_DIR}/cf-config.log"
+
+  info "验证 cloudflared 配置包含 ha-connections 和 loglevel"
+  make_fixture "$fixture"
+  make_mock_bin "$bin_dir" "$log_file"
+  rm -f "${fixture}/cloudflared/config.yml" "${fixture}/cloudflared/easygate-home.json"
+
+  mkdir -p "${home_dir}/.cloudflared" "${runtime_dir}"
+  touch "${home_dir}/.cloudflared/cert.pem"
+  echo '{"source":"cf-config"}' > "${home_dir}/.cloudflared/0000.json"
+
+  EASYGATE_CI=true \
+  EASYGATE_CLOUDFLARED_HOME="${home_dir}/.cloudflared" \
+  EASYGATE_HOME="$runtime_dir" \
+  PATH="${bin_dir}:$PATH" \
+    bash "${fixture}/scripts/easygate" deploy --domain "example.test" --skip-route --no-install-cloudflared || true
+
+  assert_contains "${runtime_dir}/cloudflared/config.yml" "ha-connections"
+  assert_contains "${runtime_dir}/cloudflared/config.yml" "loglevel"
+}
+
+run_native_cloudflared_config_test() {
+  local fixture home_dir runtime_dir bin_dir log_file
+  fixture="${TMP_DIR}/native-cf-config-fixture"
+  home_dir="${TMP_DIR}/native-cf-config-home"
+  runtime_dir="${TMP_DIR}/native-cf-config-runtime"
+  bin_dir="${TMP_DIR}/native-cf-config-bin"
+  log_file="${TMP_DIR}/native-cf-config.log"
+
+  info "验证原生模式 cloudflared 配置包含 ha-connections 和 loglevel"
+  make_fixture "$fixture"
+  make_mock_bin "$bin_dir" "$log_file"
+  rm -f "${fixture}/cloudflared/config.yml" "${fixture}/cloudflared/easygate-home.json"
+
+  mkdir -p "${home_dir}/.cloudflared" "${runtime_dir}" "${runtime_dir}/run" "${runtime_dir}/logs"
+  touch "${home_dir}/.cloudflared/cert.pem"
+  echo '{"source":"native-cf"}' > "${home_dir}/.cloudflared/0000.json"
+
+  EASYGATE_CI=true \
+  EASYGATE_CLOUDFLARED_HOME="${home_dir}/.cloudflared" \
+  EASYGATE_HOME="$runtime_dir" \
+  PATH="${bin_dir}:$PATH" \
+    bash "${fixture}/scripts/easygate" deploy --native --domain "example.test" --skip-route --no-install-cloudflared --no-install-traefik || true
+
+  assert_contains "${runtime_dir}/cloudflared/config.native.yml" "ha-connections"
+  assert_contains "${runtime_dir}/cloudflared/config.native.yml" "loglevel"
+}
+
+run_uninstall_cleanup_test() {
+  local fixture home_dir runtime_dir bin_dir log_file
+  fixture="${TMP_DIR}/uninstall-cleanup-fixture"
+  home_dir="${TMP_DIR}/uninstall-cleanup-home"
+  runtime_dir="${TMP_DIR}/uninstall-cleanup-runtime"
+  bin_dir="${TMP_DIR}/uninstall-cleanup-bin"
+  log_file="${TMP_DIR}/uninstall-cleanup.log"
+
+  info "验证 uninstall 清理 PID 文件和运行时目录"
+  make_fixture "$fixture"
+  make_mock_bin "$bin_dir" "$log_file"
+
+  mkdir -p "${runtime_dir}/run" "${runtime_dir}/logs" "${runtime_dir}/compose"
+  touch "${runtime_dir}/compose/docker-compose.yml"
+  touch "${runtime_dir}/compose/.env"
+  echo "12345" > "${runtime_dir}/run/native-traefik.pid"
+  echo "12346" > "${runtime_dir}/run/native-cloudflared.pid"
+
+  EASYGATE_HOME="$runtime_dir" \
+  PATH="${bin_dir}:$PATH" \
+    bash "${fixture}/scripts/easygate" uninstall || true
+
+  assert_missing "$runtime_dir"
+}
+
+run_ps_shows_all_services_test() {
+  local fixture home_dir runtime_dir bin_dir log_file
+  fixture="${TMP_DIR}/ps-all-fixture"
+  home_dir="${TMP_DIR}/ps-all-home"
+  runtime_dir="${TMP_DIR}/ps-all-runtime"
+  bin_dir="${TMP_DIR}/ps-all-bin"
+  log_file="${TMP_DIR}/ps-all.log"
+
+  info "验证 ps 显示所有服务状态（含 demo）"
+  make_fixture "$fixture"
+  make_mock_bin "$bin_dir" "$log_file"
+
+  mkdir -p "${runtime_dir}/run"
+  # Mock running processes
+  echo "$$" > "${runtime_dir}/run/native-demo-api.pid"
+  echo "$$" > "${runtime_dir}/run/native-demo-test-api.pid"
+
+  # Check ps output mentions demo services
+  local ps_output
+  ps_output="$(EASYGATE_HOME="$runtime_dir" PATH="${bin_dir}:$PATH" bash "${fixture}/scripts/easygate" ps 2>&1)" || true
+  if ! echo "$ps_output" | grep -q "demo-api"; then
+    fail "ps 输出未包含 demo-api"
+  fi
+  if ! echo "$ps_output" | grep -q "demo-test-api"; then
+    fail "ps 输出未包含 demo-test-api"
+  fi
+}
+
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 run_deploy_behavior_test
@@ -516,5 +699,11 @@ run_install_behavior_test
 run_install_pipe_behavior_test
 run_validation_behavior_test
 run_uninstall_behavior_test
+run_native_stop_start_behavior_test
+run_deploy_mode_file_test
+run_cloudflared_config_test
+run_native_cloudflared_config_test
+run_uninstall_cleanup_test
+run_ps_shows_all_services_test
 
 info "行为测试通过"

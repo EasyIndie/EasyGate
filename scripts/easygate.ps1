@@ -761,6 +761,8 @@ http:
     @(
       "tunnel: $Tunnel"
       "credentials-file: $((Join-Path $EasyGateHome "cloudflared\$Tunnel.json").Replace("\", "/"))"
+      "ha-connections: 2"
+      "loglevel: warn"
       ""
       "ingress:"
       "  - hostname: ""*.$Domain"""
