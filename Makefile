@@ -1,7 +1,7 @@
 COMPOSE=./scripts/compose.sh
 LOCAL_COMPOSE=docker compose -f docker-compose.local.yml --env-file .env --profile demo
 
-.PHONY: help install deploy deploy-native uninstall test behavior-test local-acceptance local-acceptance-native local-up local-down local-logs up down cleanup cleanup-native purge purge-native demo config logs ps native-logs lint network-create
+.PHONY: help install deploy deploy-native uninstall test behavior-test local-acceptance local-acceptance-native local-up local-down local-logs start stop restart demo purge config logs ps native-logs lint network-create
 
 # ── Default target ────────────────────────────────────────────────────
 
@@ -14,16 +14,15 @@ help:
 	@echo "  make install              安装独立 CLI"
 	@echo "  make uninstall            卸载"
 	@echo ""
-	@echo "管理："
-	@echo "  make up / down            启动 / 停止 Compose 栈"
-	@echo "  make ps / logs / config   容器状态 / 日志 / 配置"
-	@echo "  make demo                 启动演示服务"
-	@echo "  make cleanup / purge      清理（保留配置）/ 彻底清理"
-	@echo "  make cleanup-native / purge-native  同上（原生模式）"
+	@echo "服务管理："
+	@echo "  make start / stop / restart  启动 / 停止 / 重启服务"
+	@echo "  make ps / logs / config      状态 / 日志 / 配置"
+	@echo "  make demo                    启动 demo 服务"
+	@echo "  make purge                   停止并删除所有本地数据"
 	@echo ""
 	@echo "开发："
-	@echo "  make test                 静态检查"
-	@echo "  make behavior-test        行为测试（mock）"
+	@echo "  make test                 静态检查 + 行为测试"
+	@echo "  make behavior-test        仅行为测试（mock）"
 	@echo "  make lint                 运行 ShellCheck"
 	@echo "  make local-acceptance     本地 Docker 路由验收"
 	@echo "  make local-acceptance-native  本地原生路由验收"
@@ -45,28 +44,22 @@ deploy-native:
 uninstall:
 	./scripts/uninstall.sh
 
-# ── Management ────────────────────────────────────────────────────────
+# ── Service Management ────────────────────────────────────────────────
 
-up:
-	$(COMPOSE) up -d
+start:
+	$(COMPOSE) start
 
-down:
-	$(COMPOSE) down
+stop:
+	$(COMPOSE) stop
 
-cleanup:
-	./scripts/cleanup.sh
-
-cleanup-native:
-	./scripts/cleanup-native.sh
-
-purge:
-	./scripts/cleanup.sh --purge
-
-purge-native:
-	./scripts/cleanup-native.sh --purge
+restart:
+	$(COMPOSE) restart
 
 demo:
 	$(COMPOSE) --profile demo up -d
+
+purge:
+	./scripts/cleanup.sh --purge
 
 config:
 	$(COMPOSE) --env-file .env config
@@ -75,8 +68,8 @@ logs:
 	$(COMPOSE) logs -f traefik cloudflared
 
 native-logs:
-	@if [ -f "$${EASYGATE_HOME:-$$HOME/.local/share/easygate}/logs/native-traefik.log" ]; then \
-		tail -f "$${EASYGATE_HOME:-$$HOME/.local/share/easygate}/logs/native-traefik.log" "$${EASYGATE_HOME:-$$HOME/.local/share/easygate}/logs/native-cloudflared.log"; \
+	@if [ -f "$${EASYGATE_HOME:-$$HOME/.easygate}/logs/native-traefik.log" ]; then \
+		tail -f "$${EASYGATE_HOME:-$$HOME/.easygate}/logs/native-traefik.log" "$${EASYGATE_HOME:-$$HOME/.easygate}/logs/native-cloudflared.log"; \
 	else \
 		echo "原生模式日志不存在，请先执行 make deploy-native"; \
 	fi

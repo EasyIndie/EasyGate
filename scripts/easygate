@@ -52,11 +52,12 @@ usage() {
 用法：
   easygate deploy --domain <domain> [选项]
   easygate native deploy --domain <domain> [选项]
-  easygate cleanup [--purge]
-  easygate native cleanup [--purge]
-  easygate uninstall
-  easygate ps|logs|config|up|down|demo [cleanup]
-  easygate home
+  easygate start|stop|restart      服务管理
+  easygate ps|logs|config          状态与日志
+  easygate demo start|stop|restart Demo 服务
+  easygate purge                   删除全部本地数据
+  easygate uninstall               卸载 CLI
+  easygate home|version            信息查询
 
 常用选项：
   --domain <domain>       主域名，例如 example.com
@@ -1016,65 +1017,106 @@ EOF_CLOUDFLARED
   printf '  运行时目录：%s\n' "$EASYGATE_HOME"
 }
 
-cleanup_compose() {
-  local purge=false
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --purge) purge=true ;;
-      -h|--help) usage; exit 0 ;;
-      *) error "未知参数：$1"; usage; exit 1 ;;
-    esac
-    shift
-  done
-
-  require_command docker || exit 1
-  docker compose version >/dev/null 2>&1 || { error "当前 Docker 未提供 docker compose"; exit 1; }
-
-  info "停止并移除 EasyGate 容器和网络"
-  if [[ -f "$COMPOSE_FILE" && -f "$COMPOSE_ENV" ]]; then
-    docker compose -p easygate -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV" down --remove-orphans
-  else
-    warn "未找到运行时 Compose 配置：${COMPOSE_FILE}，跳过 docker compose down"
-  fi
-
-  if [[ "$purge" != true ]]; then
-    info "清理完成。本地配置和 tunnel 凭据已保留。"
-    return
-  fi
-
-  warn "即将删除运行时目录 ${EASYGATE_HOME}，包括本地配置、二进制和 tunnel 凭据。"
-  local confirm="${EASYGATE_CONFIRM_PURGE:-}"
-  if [[ -z "$confirm" ]]; then
-    read -r -p "确认继续？输入 yes: " confirm
-  fi
-  [[ "$confirm" == "yes" ]] || { warn "已取消彻底清理"; return; }
-  rm -rf "$EASYGATE_HOME"
-  info "已删除 ${EASYGATE_HOME}"
+native_logs() {
+  tail -f "${EASYGATE_HOME}/logs/native-traefik.log" "${EASYGATE_HOME}/logs/native-cloudflared.log"
 }
 
-cleanup_native() {
-  local purge=false
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --purge) purge=true ;;
-      -h|--help) usage; exit 0 ;;
-      *) error "未知参数：$1"; usage; exit 1 ;;
-    esac
-    shift
-  done
+# ── Service management helpers ───────────────────────────────────────
 
-  # Unregister system services first.
+# 检测当前部署模式：读取 .mode 文件或推断
+detect_mode() {
+  if [[ -f "${EASYGATE_HOME}/.mode" ]]; then
+    cat "${EASYGATE_HOME}/.mode"
+    return
+  fi
+  # 从 PID 文件推断原生模式，从 compose 文件推断 Docker 模式
+  if [[ -f "${EASYGATE_HOME}/run/native-traefik.pid" ]] || [[ -f "${EASYGATE_HOME}/run/native-cloudflared.pid" ]]; then
+    echo "native"
+    return
+  fi
+  if [[ -f "$COMPOSE_FILE" && -f "$COMPOSE_ENV" ]]; then
+    echo "compose"
+    return
+  fi
+  echo ""
+}
+
+start_services() {
+  local mode
+  mode="$(detect_mode)"
+  case "$mode" in
+    compose)
+      require_command docker || exit 1
+      compose start "$@"
+      info "服务已启动"
+      ;;
+    native) start_native_services ;;
+    *) error "未找到已部署的服务，请先执行 easygate deploy" ; return 1 ;;
+  esac
+}
+
+stop_services() {
+  local mode
+  mode="$(detect_mode)"
+  case "$mode" in
+    compose)
+      require_command docker || exit 1
+      compose stop "$@"
+      info "服务已停止，配置和凭据已保留"
+      ;;
+    native) stop_native_services ;;
+    *) error "未找到已部署的服务，请先执行 easygate deploy" ; return 1 ;;
+  esac
+}
+
+restart_services() {
+  local mode
+  mode="$(detect_mode)"
+  case "$mode" in
+    compose)
+      require_command docker || exit 1
+      compose restart "$@"
+      info "服务已重启"
+      ;;
+    native)
+      stop_native_services
+      start_native_services
+      info "服务已重启"
+      ;;
+    *) error "未找到已部署的服务，请先执行 easygate deploy" ; return 1 ;;
+  esac
+}
+
+start_native_services() {
+  # 从保存的配置中恢复启动原生进程
+  local env_file="${EASYGATE_HOME}/native/.env"
+  [[ -f "$env_file" ]] || { error "未找到原生模式环境文件：${env_file}"; return 1; }
+  # shellcheck source=/dev/null
+  source "$env_file"
+
+  local traefik_bin="${EASYGATE_HOME}/bin/traefik"
+  local cloudflared_bin="${EASYGATE_HOME}/bin/cloudflared"
+  command -v traefik >/dev/null 2>&1 && traefik_bin="$(command -v traefik)"
+  command -v cloudflared >/dev/null 2>&1 && cloudflared_bin="$(command -v cloudflared)"
+
+  check_port_available "${TRAEFIK_HTTP_PORT:-18080}" "Traefik 端口" || return 1
+  start_process "native-traefik" "$traefik_bin" --configFile="${EASYGATE_HOME}/native/traefik.yml"
+  if [[ "${EASYGATE_DEPLOY_MODE:-}" != "local-only" ]]; then
+    start_process "native-cloudflared" "$cloudflared_bin" tunnel --config "${EASYGATE_HOME}/cloudflared/config.native.yml" run
+  fi
+}
+
+stop_native_services() {
   case "$(uname -s)" in
     Linux)
-      unregister_systemd "native-traefik"
-      unregister_systemd "native-cloudflared"
+      unregister_systemd "native-traefik" || true
+      unregister_systemd "native-cloudflared" || true
       ;;
     Darwin)
-      unregister_launchd "native-traefik"
-      unregister_launchd "native-cloudflared"
+      unregister_launchd "native-traefik" || true
+      unregister_launchd "native-cloudflared" || true
       ;;
   esac
-
   for pid_file in \
     "${EASYGATE_HOME}/run/native-cloudflared.pid" \
     "${EASYGATE_HOME}/run/native-traefik.pid" \
@@ -1082,18 +1124,58 @@ cleanup_native() {
     "${EASYGATE_HOME}/run/native-demo-test-api.pid"; do
     stop_pid_file "$pid_file"
   done
-
-  if [[ "$purge" == true ]]; then
-    rm -rf "${EASYGATE_HOME}/native" "${EASYGATE_HOME}/run" "${EASYGATE_HOME}/logs"
-    rm -f "${EASYGATE_HOME}/cloudflared/config.native.yml"
-    info "已删除原生模式本地运行配置"
-  else
-    info "原生模式进程已停止，配置和凭据已保留"
-  fi
 }
 
-native_logs() {
-  tail -f "${EASYGATE_HOME}/logs/native-traefik.log" "${EASYGATE_HOME}/logs/native-cloudflared.log"
+purge_services() {
+  warn "即将删除运行时目录 ${EASYGATE_HOME}，包括本地配置、二进制和 tunnel 凭据。"
+  warn "该操作不会删除 Cloudflare 上的 DNS 记录或 tunnel。"
+  local confirm="${EASYGATE_CONFIRM_PURGE:-}"
+  if [[ -z "$confirm" ]]; then
+    read -r -p "确认继续？输入 yes: " confirm
+  fi
+  [[ "$confirm" == "yes" ]] || { warn "已取消清理"; return; }
+
+  local mode
+  mode="$(detect_mode)"
+  case "$mode" in
+    compose)
+      if [[ -f "$COMPOSE_FILE" && -f "$COMPOSE_ENV" ]]; then
+        docker compose -p easygate -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV" down --remove-orphans >/dev/null 2>&1 || true
+      fi
+      ;;
+    native) stop_native_services ;;
+  esac
+
+  if [[ -e "$EASYGATE_HOME" ]]; then
+    rm -rf "$EASYGATE_HOME"
+    info "已删除 ${EASYGATE_HOME}"
+  fi
+  info "清理完成。Cloudflare 侧资源如需删除，请使用 cloudflared CLI 或 Cloudflare Dashboard 手动处理。"
+}
+
+show_status() {
+  local mode
+  mode="$(detect_mode)"
+  case "$mode" in
+    compose) compose ps "$@" ;;
+    native)
+      info "原生模式进程状态："
+      for pid_file in \
+        "${EASYGATE_HOME}/run/native-traefik.pid" \
+        "${EASYGATE_HOME}/run/native-cloudflared.pid" \
+        "${EASYGATE_HOME}/run/native-demo-api.pid" \
+        "${EASYGATE_HOME}/run/native-demo-test-api.pid"; do
+        local name
+        name="$(basename "$pid_file" .pid | sed 's/^native-//')"
+        if native_pid_active "$pid_file"; then
+          printf '  %-15s running  (pid %s)\n' "$name" "$(cat "$pid_file")"
+        else
+          printf '  %-15s stopped\n' "$name"
+        fi
+      done
+      ;;
+    *) error "未找到已部署的服务"; return 1 ;;
+  esac
 }
 
 cmd="${1:-}"
@@ -1101,27 +1183,34 @@ if [[ $# -gt 0 ]]; then shift; fi
 
 case "$cmd" in
   deploy) deploy_compose "$@" ;;
-  cleanup) cleanup_compose "$@" ;;
-  purge) cleanup_compose --purge "$@" ;;
-  ps) compose ps "$@" ;;
-  logs) compose logs -f traefik cloudflared "$@" ;;
+  start) start_services "$@" ;;
+  stop) stop_services "$@" ;;
+  restart) restart_services "$@" ;;
+  purge) purge_services "$@" ;;
+  ps|status) show_status "$@" ;;
+  logs) native_logs 2>/dev/null; compose logs -f traefik cloudflared "$@" 2>/dev/null || true ;;
   config) compose config "$@" ;;
-  up) compose up -d "$@" ;;
-  down) compose down "$@" ;;
   demo)
-    if [[ "${1:-}" == "cleanup" ]]; then
-      shift
-      compose --profile demo stop demo-api demo-test-api "$@"
-      compose --profile demo rm -f demo-api demo-test-api "$@"
-    else
-      compose --profile demo up -d "$@"
-    fi
+    subcmd="${1:-start}"
+    [[ "${1:-}" != "" ]] && shift || true
+    case "$subcmd" in
+      start) compose --profile demo up -d "$@" ;;
+      stop)
+        compose --profile demo stop demo-api demo-test-api "$@"
+        compose --profile demo rm -f demo-api demo-test-api "$@"
+        ;;
+      restart)
+        compose --profile demo stop demo-api demo-test-api "$@"
+        compose --profile demo rm -f demo-api demo-test-api "$@"
+        compose --profile demo up -d "$@"
+        ;;
+      *) error "未知 demo 子命令：${subcmd}。可用：start|stop|restart"; usage; exit 1 ;;
+    esac
     ;;
   home) printf '%s\n' "$EASYGATE_HOME" ;;
   version|--version) printf 'easygate %s\n' "$VERSION" ;;
   uninstall)
-    cleanup_compose "$@"
-    cleanup_native "$@"
+    stop_services 2>/dev/null || true
     for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"; do
       [[ -f "$rc" ]] || continue
       if grep -qs "${EASYGATE_HOME}/bin" "$rc" 2>/dev/null; then
@@ -1147,8 +1236,6 @@ case "$cmd" in
     if [[ $# -gt 0 ]]; then shift; fi
     case "$subcmd" in
       deploy) deploy_native "$@" ;;
-      cleanup) cleanup_native "$@" ;;
-      purge) cleanup_native --purge "$@" ;;
       logs) native_logs "$@" ;;
       *) usage; exit 1 ;;
     esac
