@@ -85,6 +85,11 @@ REPO="${EASYGATE_REPO:-EasyIndie/EasyGate}"
 REF="${EASYGATE_REF:-main}"
 SOURCE_URL="${EASYGATE_CLI_URL:-https://raw.githubusercontent.com/${REPO}/${REF}/scripts/easygate}"
 
+# CLI 校验和 —— 默认 __SKIP__ 跳过校验（开发/CI 场景）。
+# Release 工作流用 sed 替换整行，嵌入真实校验和：
+#   s/EASYGATE_CLI_CHECKSUM=.*/EASYGATE_CLI_CHECKSUM="<sha256>"/
+EASYGATE_CLI_CHECKSUM="${EASYGATE_CLI_CHECKSUM:-__SKIP__}"
+
 EASYGATE_HOME="$(default_easygate_home)"
 INSTALL_DIR="${EASYGATE_HOME}/bin"
 TARGET="${INSTALL_DIR}/easygate"
@@ -98,6 +103,20 @@ else
   require_command curl
   info "下载 CLI：${SOURCE_URL}"
   curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 "$SOURCE_URL" -o "$TARGET"
+fi
+
+# 校验 CLI 文件（仅当校验和不为 __SKIP__ 时）
+if [[ "$EASYGATE_CLI_CHECKSUM" != "__SKIP__" ]]; then
+  require_command shasum
+  info "验证 CLI 校验和"
+  actual="$(shasum -a 256 "$TARGET" 2>/dev/null | awk '{print $1}')"
+  if [[ "$actual" != "$EASYGATE_CLI_CHECKSUM" ]]; then
+    error "easygate CLI 校验和不匹配！"
+    error "期望：${EASYGATE_CLI_CHECKSUM}"
+    error "实际：${actual}"
+    exit 1
+  fi
+  info "校验通过"
 fi
 
 chmod +x "$TARGET"
