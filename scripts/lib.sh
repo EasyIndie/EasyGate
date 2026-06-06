@@ -265,7 +265,13 @@ prepare_tunnel_credentials() {
     warn "tunnel ${tunnel_name} 已存在，通过 token 获取凭据"
     credentials_tmp="$(mktemp "${EASYGATE_HOME}/cloudflared/${tunnel_name}.json.XXXXXX")"
     if cloudflared tunnel token "$tunnel_name" 2>/dev/null | grep -q '^eyJ' && \
-       cloudflared tunnel token "$tunnel_name" 2>/dev/null | head -1 | base64 -d > "$credentials_tmp" 2>/dev/null && \
+       cloudflared tunnel token "$tunnel_name" 2>/dev/null | head -1 | base64 -d | \
+       python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+creds = {'AccountTag': data['a'], 'TunnelSecret': data['s'], 'TunnelID': data['t']}
+json.dump(creds, sys.stdout)
+" > "$credentials_tmp" 2>/dev/null && \
        [[ -s "$credentials_tmp" ]]; then
       chmod 600 "$credentials_tmp"
       mv -f "$credentials_tmp" "$target"
