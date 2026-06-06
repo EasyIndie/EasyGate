@@ -71,3 +71,11 @@ jobs:
             --title "$TAG_NAME" \
             --generate-notes \
             --verify-tag
+
+      - name: Prepend install one-liner to release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          INSTALL_CMD="curl -fsSL https://raw.githubusercontent.com/EasyIndie/EasyGate/${TAG_NAME}/scripts/install.sh | bash -s -- deploy --domain example.com"
+          EXISTING="$(gh release view "$TAG_NAME" --json body -q .body)"
+          gh release edit "$TAG_NAME" --notes "$(printf '## 一键部署\n\n```sh\n%s\n```\n\n%s' "$INSTALL_CMD" "$EXISTING")"
