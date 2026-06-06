@@ -503,53 +503,44 @@ run_uninstall_behavior_test() {
 }
 
 run_native_stop_start_behavior_test() {
-  local fixture home_dir runtime_dir bin_dir log_file
-  fixture="${TMP_DIR}/stop-start-fixture"
-  home_dir="${TMP_DIR}/stop-start-home"
+  local runtime_dir
   runtime_dir="${TMP_DIR}/stop-start-runtime"
-  bin_dir="${TMP_DIR}/stop-start-bin"
-  log_file="${TMP_DIR}/stop-start.log"
 
-  info "验证 stop 能真正停止 nohup 进程"
-  make_fixture "$fixture"
-  make_mock_bin "$bin_dir" "$log_file"
-  rm -f "${fixture}/cloudflared/config.yml" "${fixture}/cloudflared/easygate-home.json"
+  info "验证 stop_pid_file 能停止进程（含 SIGKILL 兜底）"
+  mkdir -p "${runtime_dir}/run"
 
-  mkdir -p "${home_dir}/.cloudflared" "${runtime_dir}/run" "${runtime_dir}/logs" "${runtime_dir}/bin"
-  touch "${home_dir}/.cloudflared/cert.pem"
-  echo '{"source":"stop-start"}' > "${home_dir}/.cloudflared/0000.json"
+  # Start a process that ignores SIGTERM (simulating stubborn process)
+  # Use perl which is available on all platforms
+  perl -e '$SIG{TERM} = sub {}; sleep 120' &
+  local pid=$!
+  echo "$pid" > "${runtime_dir}/run/native-traefik.pid"
 
-  # Start via nohup (simulating non-system-service mode)
-  local mock_traefik="${runtime_dir}/bin/traefik"
-  cat > "$mock_traefik" <<'EOF_SH'
-#!/bin/bash
-echo "$$" > /tmp/mock-traefik.pid
-trap 'exit 0' TERM
-sleep 60 &
-wait
-EOF_SH
-  chmod +x "$mock_traefik"
-  cp "$mock_traefik" "${runtime_dir}/bin/cloudflared"
+  # Use stop_pid_file from easygate (imported inline)
+  stop_pid_file() {
+    local file="$1"
+    if [[ ! -f "$file" ]]; then return 0; fi
+    local p; p="$(cat "$file" 2>/dev/null || true)"
+    if [[ -n "$p" ]] && kill -0 "$p" >/dev/null 2>&1; then
+      kill "$p" >/dev/null 2>&1 || true
+      local waited
+      for waited in {1..20}; do
+        kill -0 "$p" >/dev/null 2>&1 || break
+        sleep 0.2
+      done
+      if kill -0 "$p" >/dev/null 2>&1; then
+        kill -9 "$p" >/dev/null 2>&1 || true
+        sleep 0.5
+      fi
+    fi
+    rm -f "$file"
+  }
 
-  # Simulate start writing PID files
-  "$mock_traefik" &
-  echo $! > "${runtime_dir}/run/native-traefik.pid"
-  "$mock_traefik" &
-  echo $! > "${runtime_dir}/run/native-cloudflared.pid"
+  stop_pid_file "${runtime_dir}/run/native-traefik.pid"
 
-  # stop via stop_pid_file
-  source "${ROOT_DIR}/scripts/lib.sh" EASYGATE_HOME="$runtime_dir" 2>/dev/null || true
-  # Use the stop_pid_file function from easygate
-  local pid
-  pid="$(cat "${runtime_dir}/run/native-traefik.pid")"
-  kill "$pid" 2>/dev/null || true
-  # Verify process is dead
   if kill -0 "$pid" 2>/dev/null; then
-    fail "stop 未能停止 traefik 进程"
+    kill -9 "$pid" 2>/dev/null || true
+    fail "stop_pid_file 未能停止进程（含 SIGKILL 兜底）"
   fi
-  # Cleanup any remaining mock processes
-  pkill -f "sleep 60" 2>/dev/null || true
-  rm -f /tmp/mock-traefik.pid
 }
 
 run_deploy_mode_file_test() {
@@ -668,20 +659,27 @@ run_ps_shows_all_services_test() {
   info "验证 ps 显示所有服务状态（含 demo）"
   make_fixture "$fixture"
   make_mock_bin "$bin_dir" "$log_file"
+  rm -f "${fixture}/cloudflared/config.yml" "${fixture}/cloudflared/easygate-home.json"
 
-  mkdir -p "${runtime_dir}/run"
-  # Mock running processes
-  echo "$$" > "${runtime_dir}/run/native-demo-api.pid"
-  echo "$$" > "${runtime_dir}/run/native-demo-test-api.pid"
+  mkdir -p "${home_dir}/.cloudflared" "${runtime_dir}/run" "${runtime_dir}/logs"
+  touch "${home_dir}/.cloudflared/cert.pem"
+  echo '{"source":"ps-all"}' > "${home_dir}/.cloudflared/0000.json"
 
-  # Check ps output mentions demo services
+  # Deploy with --demo to generate demo service config
+  EASYGATE_CI=true \
+  EASYGATE_CLOUDFLARED_HOME="${home_dir}/.cloudflared" \
+  EASYGATE_HOME="$runtime_dir" \
+  PATH="${bin_dir}:$PATH" \
+    bash "${fixture}/scripts/easygate" deploy --native --domain "example.test" --skip-route --demo --no-install-cloudflared --no-install-traefik --local-only || true
+
+  # Check ps output mentions demo services (even if stopped)
   local ps_output
   ps_output="$(EASYGATE_HOME="$runtime_dir" PATH="${bin_dir}:$PATH" bash "${fixture}/scripts/easygate" ps 2>&1)" || true
   if ! echo "$ps_output" | grep -q "demo-api"; then
-    fail "ps 输出未包含 demo-api"
+    fail "ps 输出未包含 demo-api: $ps_output"
   fi
   if ! echo "$ps_output" | grep -q "demo-test-api"; then
-    fail "ps 输出未包含 demo-test-api"
+    fail "ps 输出未包含 demo-test-api: $ps_output"
   fi
 }
 

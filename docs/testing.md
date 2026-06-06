@@ -30,7 +30,7 @@ make lint               # ShellCheck（需安装 shellcheck）
 
 Mock 二进制（docker、cloudflared、traefik）隔离真实环境，不需要 Cloudflare 账号。
 
-### Bash 测试（13 个用例）
+### Bash 测试（19 个用例）
 
 | 测试 | 验证内容 |
 |------|----------|
@@ -44,9 +44,15 @@ Mock 二进制（docker、cloudflared、traefik）隔离真实环境，不需要
 | 模式互斥 | compose 和 native 双向阻止 |
 | 独立 CLI | CLI 不依赖源码仓库 |
 | install.sh 安装 | CLI 安装路径正确，PATH 格式合法 |
-| **管道模式安装** | `curl \| bash` 模拟，无 BASH_SOURCE 依赖 |
-| **输入校验** | validate_port/domain/tunnel_name 20+ 边界值 |
-| **uninstall** | 删除 CLI + 清理 PATH + 保留非 EasyGate 内容 |
+| 管道模式安装 | `curl \| bash` 模拟，无 BASH_SOURCE 依赖 |
+| 输入校验 | validate_port/domain/tunnel_name 20+ 边界值 |
+| uninstall | 删除 CLI + 清理 PATH + 保留非 EasyGate 内容 |
+| **stop 停止进程** | stop_pid_file 含 SIGKILL 兜底能终止顽固进程 |
+| **.mode 文件** | 部署时写入 .mode 供 detect_mode 读取 |
+| **cloudflared 配置** | ha-connections + loglevel 写入 compose 模式配置 |
+| **cloudflared 配置(原生)** | ha-connections + loglevel 写入原生模式配置 |
+| **uninstall 清理** | 删除 PID 文件和运行时目录 |
+| **ps 显示 demo** | ps 输出包含 demo 服务状态 |
 
 ### PowerShell 测试（8 个用例）
 
