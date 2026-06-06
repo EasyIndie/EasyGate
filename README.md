@@ -54,13 +54,31 @@ dig @1.1.1.1 api.example.com A +short    # 确认解析生效
 
 ## 安装部署
 
-一行命令完成安装和部署：
+一行命令完成安装和部署。根据场景选择模式：
+
+### Docker Compose 模式（推荐）
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/EasyIndie/EasyGate/main/scripts/install.sh | bash -s -- deploy --domain example.com --demo
 ```
 
 安装后 CLI 在 `~/.easygate/bin/easygate`，自动写入 PATH，立即生效。部署后访问 `https://api.example.com` 验证 demo 服务。
+
+### 原生模式（无需 Docker）
+
+先安装 CLI：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/EasyIndie/EasyGate/main/scripts/install.sh | bash
+```
+
+再部署：
+
+```sh
+easygate native deploy --domain example.com --demo
+```
+
+原生模式会自动注册系统服务（systemd / launchd），设备重启后进程自动恢复。
 
 **详细说明**：参见 [部署指南](docs/deployment.md) —— 涵盖 Docker / 原生部署、所有选项参数、接入自己的服务、域名约定、清理卸载。
 
