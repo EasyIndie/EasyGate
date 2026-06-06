@@ -26,10 +26,7 @@ default_easygate_home() {
     return
   fi
 
-  case "$(uname -s)" in
-    Darwin) printf '%s' "${HOME}/Library/Application Support/EasyGate" ;;
-    *) printf '%s' "${XDG_DATA_HOME:-${HOME}/.local/share}/easygate" ;;
-  esac
+  printf '%s' "${HOME}/.easygate"
 }
 
 # Resolve once and export so all sourced functions see the same value.

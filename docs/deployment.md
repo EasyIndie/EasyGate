@@ -43,8 +43,7 @@ powershell -ExecutionPolicy Bypass -File $env:TEMP\easygate-install.ps1
 
 | 平台 | 默认 EASYGATE_HOME |
 |------|-------------------|
-| macOS | `~/Library/Application Support/EasyGate` |
-| Linux | `~/.local/share/easygate` |
+| macOS / Linux | `~/.easygate` |
 | Windows | `%LOCALAPPDATA%\EasyGate` |
 
 用 `EASYGATE_HOME` 环境变量可自定义位置。

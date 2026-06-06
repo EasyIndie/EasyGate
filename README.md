@@ -16,7 +16,7 @@
 curl -fsSL https://raw.githubusercontent.com/EasyIndie/EasyGate/main/scripts/install.sh | bash -s -- deploy --domain example.com
 ```
 
-安装后 CLI 自动加入 PATH（写入 `~/.zshrc` / `~/.bashrc`），立即生效。
+CLI 安装到 `~/.easygate/bin/easygate`，自动加入 PATH（写入 `~/.zshrc` / `~/.bashrc`），立即生效。
 
 ## 日常命令
 

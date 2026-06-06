@@ -20,10 +20,7 @@ default_easygate_home() {
     printf '%s' "$EASYGATE_HOME"
     return
   fi
-  case "$(uname -s)" in
-    Darwin) printf '%s' "${HOME}/Library/Application Support/EasyGate" ;;
-    *)      printf '%s' "${XDG_DATA_HOME:-${HOME}/.local/share}/easygate" ;;
-  esac
+  printf '%s' "${HOME}/.easygate"
 }
 
 # ── PATH 自动配置 ──────────────────────────────────────────────────────
