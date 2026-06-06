@@ -1246,18 +1246,30 @@ stop_native_demo() {
   info "原生 demo 服务已停止"
 }
 
-# 注销系统服务（purge/uninstall 时调用，彻底清除注册）
+# 注销系统服务（停止进程 + 删除注册文件 + 清理 PID）
 unregister_native_services() {
   case "$(uname -s)" in
     Linux)
-      unregister_systemd "native-traefik" || true
-      unregister_systemd "native-cloudflared" || true
+      # 先停再注销
+      systemctl --user stop "easygate-traefik.service" "easygate-cloudflared.service" >/dev/null 2>&1 || true
+      systemctl --user disable "easygate-traefik.service" "easygate-cloudflared.service" >/dev/null 2>&1 || true
+      rm -f "${HOME}/.config/systemd/user/easygate-traefik.service" \
+            "${HOME}/.config/systemd/user/easygate-cloudflared.service"
+      systemctl --user daemon-reload >/dev/null 2>&1 || true
       ;;
     Darwin)
-      unregister_launchd "native-traefik" || true
-      unregister_launchd "native-cloudflared" || true
+      # launchctl unload 停止并卸载 plist
+      launchctl unload "${HOME}/Library/LaunchAgents/com.easygate.native-traefik.plist" >/dev/null 2>&1 || true
+      launchctl unload "${HOME}/Library/LaunchAgents/com.easygate.native-cloudflared.plist" >/dev/null 2>&1 || true
+      rm -f "${HOME}/Library/LaunchAgents/com.easygate.native-traefik.plist" \
+            "${HOME}/Library/LaunchAgents/com.easygate.native-cloudflared.plist"
       ;;
   esac
+  # 清理 PID 文件
+  rm -f "${EASYGATE_HOME}/run/native-traefik.pid" \
+        "${EASYGATE_HOME}/run/native-cloudflared.pid" \
+        "${EASYGATE_HOME}/run/native-demo-api.pid" \
+        "${EASYGATE_HOME}/run/native-demo-test-api.pid"
 }
 
 show_status() {
@@ -1361,7 +1373,21 @@ case "$cmd" in
   home) printf '%s\n' "$EASYGATE_HOME" ;;
   version|--version) printf 'easygate %s\n' "$VERSION" ;;
   uninstall)
+    # 停止所有服务（compose + native + nohup 进程）
     stop_services 2>/dev/null || true
+    # 停掉所有可能的 nohup 进程（兜底，防止 PID 文件残留）
+    for pid_file in \
+      "${EASYGATE_HOME}/run/native-cloudflared.pid" \
+      "${EASYGATE_HOME}/run/native-traefik.pid" \
+      "${EASYGATE_HOME}/run/native-demo-api.pid" \
+      "${EASYGATE_HOME}/run/native-demo-test-api.pid"; do
+      stop_pid_file "$pid_file"
+    done
+    # 停掉 compose 容器（如果 docker 可用）
+    if command -v docker >/dev/null 2>&1 && [[ -f "$COMPOSE_FILE" ]]; then
+      compose down --remove-orphans >/dev/null 2>&1 || true
+    fi
+    # 注销并清理系统服务
     unregister_native_services 2>/dev/null || true
     for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"; do
       [[ -f "$rc" ]] || continue
