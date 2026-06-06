@@ -571,6 +571,10 @@ try {
 }
 finally {
   if (Test-Path $TempRoot) {
-    Remove-Item $TempRoot -Recurse -Force
+    # 终止残留的 mock 进程，确保文件可删除
+    Get-Process -Name "powershell","pwsh" -ErrorAction SilentlyContinue |
+      Where-Object { $_.CommandLine -match "native-traefik|native-cloudflared|native-demo" } |
+      Stop-Process -Force -ErrorAction SilentlyContinue
+    Remove-Item $TempRoot -Recurse -Force -ErrorAction SilentlyContinue
   }
 }
