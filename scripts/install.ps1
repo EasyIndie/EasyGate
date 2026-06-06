@@ -1,18 +1,4 @@
-param(
-  [string]$Domain,
-  [string]$Tunnel,
-  [string]$Dashboard,
-  [string]$Port,
-  [string]$ApiPort,
-  [string]$TestApiPort,
-  [switch]$SkipRoute,
-  [switch]$Demo,
-  [switch]$LocalOnly,
-  [switch]$NoInstallCloudflared,
-  [switch]$NoInstallTraefik,
-  [switch]$Purge
-)
-
+param()
 $CommandArgs = @($args)
 
 $ErrorActionPreference = "Stop"
@@ -36,21 +22,6 @@ function Get-EasyGateHome {
 $EasyGateHome = Get-EasyGateHome
 $InstallDir = Join-Path $EasyGateHome "bin"
 $Target = Join-Path $InstallDir "easygate.ps1"
-
-$ForwardedOptions = @()
-if ($PSBoundParameters.ContainsKey("Domain")) { $ForwardedOptions += @("-Domain", $Domain) }
-if ($PSBoundParameters.ContainsKey("Tunnel")) { $ForwardedOptions += @("-Tunnel", $Tunnel) }
-if ($PSBoundParameters.ContainsKey("Dashboard")) { $ForwardedOptions += @("-Dashboard", $Dashboard) }
-if ($PSBoundParameters.ContainsKey("Port")) { $ForwardedOptions += @("-Port", $Port) }
-if ($PSBoundParameters.ContainsKey("ApiPort")) { $ForwardedOptions += @("-ApiPort", $ApiPort) }
-if ($PSBoundParameters.ContainsKey("TestApiPort")) { $ForwardedOptions += @("-TestApiPort", $TestApiPort) }
-if ($SkipRoute) { $ForwardedOptions += "-SkipRoute" }
-if ($Demo) { $ForwardedOptions += "-Demo" }
-if ($LocalOnly) { $ForwardedOptions += "-LocalOnly" }
-if ($NoInstallCloudflared) { $ForwardedOptions += "-NoInstallCloudflared" }
-if ($NoInstallTraefik) { $ForwardedOptions += "-NoInstallTraefik" }
-if ($Purge) { $ForwardedOptions += "-Purge" }
-$CommandArgs = @($CommandArgs) + $ForwardedOptions
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 

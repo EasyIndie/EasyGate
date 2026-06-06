@@ -1,24 +1,9 @@
-param(
-  # Position=0 捕获第一个位置参数（子命令如 deploy/cleanup）。
-  # 不使用 ValueFromRemainingArguments 以避免 PS7 兼容性问题。
-  [Parameter(Position=0)]
-  [string]$Command,
-  [string]$Domain,
-  [string]$Tunnel,
-  [string]$Dashboard,
-  [string]$Port,
-  [string]$ApiPort,
-  [string]$TestApiPort,
-  [switch]$SkipRoute,
-  [switch]$Demo,
-  [switch]$LocalOnly,
-  [switch]$NoInstallCloudflared,
-  [switch]$NoInstallTraefik,
-  [switch]$Purge
-)
-
-# $args 捕获所有未绑定的参数（如子命令 native 后的 deploy）
+param()
+# 不使用参数绑定以避免 PS7 兼容性问题。
+# $args 捕获所有原始参数，由函数内部手动解析。
 $CommandArgs = @($args)
+$Command = ""
+$Rest = @()
 
 $ErrorActionPreference = "Stop"
 $Version = if ([string]::IsNullOrWhiteSpace($env:EASYGATE_VERSION)) { "dev" } else { $env:EASYGATE_VERSION }
@@ -44,20 +29,8 @@ $ComposeDir = Join-Path $EasyGateHome "compose"
 $ComposeFile = Join-Path $ComposeDir "docker-compose.yml"
 $ComposeEnv = Join-Path $ComposeDir ".env"
 
-$ForwardedOptions = @()
-if ($PSBoundParameters.ContainsKey("Domain")) { $ForwardedOptions += @("-Domain", $Domain) }
-if ($PSBoundParameters.ContainsKey("Tunnel")) { $ForwardedOptions += @("-Tunnel", $Tunnel) }
-if ($PSBoundParameters.ContainsKey("Dashboard")) { $ForwardedOptions += @("-Dashboard", $Dashboard) }
-if ($PSBoundParameters.ContainsKey("Port")) { $ForwardedOptions += @("-Port", $Port) }
-if ($PSBoundParameters.ContainsKey("ApiPort")) { $ForwardedOptions += @("-ApiPort", $ApiPort) }
-if ($PSBoundParameters.ContainsKey("TestApiPort")) { $ForwardedOptions += @("-TestApiPort", $TestApiPort) }
-if ($SkipRoute) { $ForwardedOptions += "-SkipRoute" }
-if ($Demo) { $ForwardedOptions += "-Demo" }
-if ($LocalOnly) { $ForwardedOptions += "-LocalOnly" }
-if ($NoInstallCloudflared) { $ForwardedOptions += "-NoInstallCloudflared" }
-if ($NoInstallTraefik) { $ForwardedOptions += "-NoInstallTraefik" }
-if ($Purge) { $ForwardedOptions += "-Purge" }
-$CommandArgs = @($CommandArgs) + $ForwardedOptions
+# 所有参数已由 $args 捕获，dispatch 函数从 $Rest 中手动解析。
+# 不需要 $PSBoundParameters / $ForwardedOptions（PS7 兼容性）。
 
 function Write-Info {
   param([string]$Message)
@@ -794,17 +767,13 @@ function Cleanup-Native {
   }
 }
 
-# $Command 由 Position=0 参数绑定捕获；裸调用时为空
-$Rest = if ($CommandArgs.Count -gt 0) { @($CommandArgs) } else { @() }
-if ([string]::IsNullOrWhiteSpace($Command)) {
-  if ($CommandArgs.Count -gt 0) {
-    $Command = $CommandArgs[0]
-    $Rest = if ($CommandArgs.Count -gt 1) { $CommandArgs[1..($CommandArgs.Count - 1)] } else { @() }
-  } else {
-    Show-Usage
-    exit 0
-  }
+# 手动解析子命令，避免 PS7 参数绑定问题
+if ($CommandArgs.Count -eq 0) {
+  Show-Usage
+  exit 0
 }
+$Command = $CommandArgs[0]
+$Rest = if ($CommandArgs.Count -gt 1) { $CommandArgs[1..($CommandArgs.Count - 1)] } else { @() }
 
 switch ($Command) {
   "deploy" { Deploy-Compose $Rest }
