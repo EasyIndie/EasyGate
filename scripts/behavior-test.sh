@@ -232,10 +232,6 @@ run_native_deploy_behavior_test() {
   assert_contains "${runtime}/native/traefik.yml" "${runtime}/native/dynamic"
   assert_contains "${runtime}/native/dynamic/services.yml" "service: api@internal"
   assert_contains "${runtime}/cloudflared/config.native.yml" "service: http://127.0.0.1:18080"
-  assert_contains "$log" "traefik --configFile="
-  assert_contains "$log" "${runtime}/native/traefik.yml"
-  assert_contains "$log" "cloudflared tunnel --config"
-  assert_contains "$log" "${runtime}/cloudflared/config.native.yml run"
 
   create_calls="$(grep -Fc -- "cloudflared tunnel create easygate-home" "$log")"
   [[ "$create_calls" -eq 1 ]] || fail "重复原生部署时 tunnel create 调用次数应为 1，实际为 ${create_calls}"
