@@ -456,7 +456,7 @@ run_uninstall_behavior_test() {
   (
     cd "$fixture"
     HOME="$TMP_DIR" SHELL="/bin/zsh" EASYGATE_HOME="$runtime" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" \
-      bash scripts/uninstall.sh
+      bash ${fixture}/scripts/easygate uninstall
   )
 
   # CLI 二进制已删除

@@ -40,7 +40,6 @@ require_file "scripts/deploy.sh"
 require_file "scripts/deploy.ps1"
 require_file "scripts/deploy-native.sh"
 require_file "scripts/deploy-native.ps1"
-require_file "scripts/uninstall.sh"
 require_file "scripts/uninstall.ps1"
 require_file "scripts/local-acceptance.sh"
 require_file "scripts/local-acceptance.ps1"
@@ -69,7 +68,6 @@ bash -n scripts/easygate
 bash -n scripts/install.sh
 bash -n scripts/deploy.sh
 bash -n scripts/deploy-native.sh
-bash -n scripts/uninstall.sh
 bash -n scripts/local-acceptance.sh
 bash -n scripts/local-acceptance-native.sh
 bash -n scripts/behavior-test.sh
@@ -83,7 +81,6 @@ if command -v shellcheck >/dev/null 2>&1; then
     scripts/install.sh \
     scripts/deploy.sh \
     scripts/deploy-native.sh \
-    scripts/uninstall.sh \
     scripts/local-acceptance.sh \
     scripts/local-acceptance-native.sh \
     scripts/behavior-test.sh; then

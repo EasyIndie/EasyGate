@@ -46,7 +46,13 @@ deploy:
 	fi
 
 uninstall:
-	./scripts/uninstall.sh
+	@if command -v easygate >/dev/null 2>&1; then \
+		easygate uninstall; \
+	elif [ -f "$${HOME}/.easygate/bin/easygate" ]; then \
+		"$${HOME}/.easygate/bin/easygate" uninstall; \
+	else \
+		echo "EasyGate CLI 未安装"; \
+	fi
 
 # ── Test ──────────────────────────────────────────────────────────────
 

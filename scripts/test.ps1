@@ -40,7 +40,6 @@ Write-Info "检查关键文件"
   "scripts/deploy.ps1",
   "scripts/deploy-native.sh",
   "scripts/deploy-native.ps1",
-  "scripts/uninstall.sh",
   "scripts/uninstall.ps1",
   "scripts/local-acceptance.sh",
   "scripts/local-acceptance.ps1",
