@@ -94,15 +94,13 @@ jobs:
           EASYGATE_LOCAL_CLI: ${{ github.workspace }}\scripts\easygate.ps1
         run: .\scripts\install.ps1
 
-      # TODO: Re-enable once PS7 ValueFromRemainingArguments + positional
-      # subcommand binding is fixed (tracked in behavior-test.ps1 skip).
-      # - name: Check standalone PowerShell CLI
-      #   shell: pwsh
-      #   env:
-      #     EASYGATE_HOME: ${{ runner.temp }}\easygate-standalone
-      #   run: |
-      #     & "$env:EASYGATE_HOME\bin\easygate.ps1" version
-      #     & "$env:EASYGATE_HOME\bin\easygate.ps1" home
+      - name: Check standalone PowerShell CLI
+        shell: pwsh
+        env:
+          EASYGATE_HOME: ${{ runner.temp }}\easygate-standalone
+        run: |
+          & "$env:EASYGATE_HOME\bin\easygate.ps1" version
+          & "$env:EASYGATE_HOME\bin\easygate.ps1" home
 
       - name: Run local acceptance
         shell: pwsh

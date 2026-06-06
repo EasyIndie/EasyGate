@@ -1,6 +1,4 @@
 param(
-  [Parameter(ValueFromRemainingArguments = $true)]
-  [string[]]$CommandArgs,
   [string]$Domain,
   [string]$Tunnel,
   [string]$Dashboard,
@@ -12,7 +10,11 @@ param(
   [switch]$LocalOnly,
   [switch]$NoInstallCloudflared,
   [switch]$NoInstallTraefik,
-  [switch]$Purge
+  [switch]$Purge,
+  # ValueFromRemainingArguments 必须在 param 块最后位置，
+  # 否则 PS7 中无法正确捕获位置子命令（如 deploy）。
+  [Parameter(ValueFromRemainingArguments = $true)]
+  [string[]]$CommandArgs
 )
 
 $ErrorActionPreference = "Stop"

@@ -519,15 +519,6 @@ function Test-NativeDeployBlocksCompose {
 }
 
 function Test-StandaloneCliBehavior {
-  # PowerShell 7 on Windows has a parameter binding quirk where
-  # ValueFromRemainingArguments does not capture the positional
-  # subcommand (e.g. "deploy") before named parameters.  Skip
-  # this test on affected versions; the Bash equivalent covers it.
-  if ($IsWindows -and $PSVersionTable.PSVersion.Major -ge 7) {
-    Write-Host "[behavior] 跳过 PowerShell 独立 CLI 测试（PS 7 ValueFromRemainingArguments 已知问题）"
-    return
-  }
-
   $Fixture = Join-Path $TempRoot "standalone-cli-fixture"
   $HomeDir = Join-Path $TempRoot "standalone-cli-home"
   $RuntimeDir = Join-Path $TempRoot "standalone-cli-runtime"

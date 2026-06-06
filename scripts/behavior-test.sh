@@ -404,6 +404,108 @@ run_cleanup_command_behavior_test() {
   assert_contains "$log" "down --remove-orphans"
 }
 
+run_validation_behavior_test() {
+  info "验证输入校验函数能正确拒绝非法值"
+
+  # 测试 validate_port
+  local script_dir="${ROOT_DIR}/scripts"
+
+  # 从 easygate CLI 中抽取校验函数并执行测试
+  local test_script="${TMP_DIR}/validate_test.sh"
+  # 提取校验函数（需要 error() 辅助函数）
+  {
+    printf 'set -euo pipefail\n'
+    printf 'error() { printf "%%s\\n" "$1" >&2; }\n'
+    sed -n '/^validate_port()/,/^}/p' "${script_dir}/easygate"
+    sed -n '/^validate_domain()/,/^}/p' "${script_dir}/easygate"
+    sed -n '/^validate_tunnel_name()/,/^}/p' "${script_dir}/easygate"
+  } > "$test_script"
+
+  # 添加测试主逻辑
+  cat >> "$test_script" <<'EOF_TEST'
+fail_count=0
+_test() {
+  local desc="$1" expected="$2"
+  shift 2
+  if "$@" >/dev/null 2>&1; then actual=0; else actual=1; fi
+  if [[ "$actual" -ne "$expected" ]]; then
+    echo "FAIL: ${desc} (expected exit ${expected}, got ${actual})"
+    : $((fail_count++))
+  fi
+}
+
+# validate_port
+_test "port 80"     0 validate_port 80
+_test "port 1"      0 validate_port 1
+_test "port 65535"  0 validate_port 65535
+_test "port 0"      1 validate_port 0
+_test "port 65536"  1 validate_port 65536
+_test "port -1"     1 validate_port -1
+_test "port abc"    1 validate_port abc
+_test "port empty"  1 validate_port ""
+
+# validate_domain (example.test 是合法测试域名)
+_test "domain ok"   0 validate_domain example.test
+_test "domain sub"  0 validate_domain api.example.test
+_test "domain example.com" 1 validate_domain example.com
+_test "domain no-dot" 1 validate_domain localhost
+_test "domain spaces" 1 validate_domain "bad domain"
+
+# validate_tunnel_name
+_test "tunnel ok"   0 validate_tunnel_name easygate-home
+_test "tunnel digit" 0 validate_tunnel_name mytunnel1
+_test "tunnel leading-hyphen" 1 validate_tunnel_name "-bad-tunnel"
+_test "tunnel trailing-hyphen" 1 validate_tunnel_name "bad-"
+_test "tunnel empty" 1 validate_tunnel_name ""
+
+exit $fail_count
+EOF_TEST
+
+  bash "$test_script" || fail "输入校验测试未通过（部分校验函数未通过测试）"
+}
+
+run_uninstall_behavior_test() {
+  local fixture="${TMP_DIR}/uninstall-fixture"
+  local bin="${TMP_DIR}/uninstall-bin"
+  local log="${TMP_DIR}/uninstall-commands.log"
+  local runtime="${TMP_DIR}/uninstall-runtime"
+
+  info "验证 uninstall 会删除 CLI 二进制并清理 shell 配置"
+  make_fixture "$fixture"
+  make_mock_bin "$bin" "$log"
+
+  # 模拟已安装的 CLI
+  mkdir -p "${runtime}/bin"
+  printf '#!/usr/bin/env bash\necho fake easygate\n' > "${runtime}/bin/easygate"
+  chmod +x "${runtime}/bin/easygate"
+
+  # 创建 mock shell 配置文件（文件名为 .zshrc 以匹配 detect_rc_file 逻辑）
+  local mock_rc="${TMP_DIR}/.zshrc"
+  printf 'export PATH="/usr/local/bin:$PATH"\n' > "$mock_rc"
+  {
+    printf '\n# EasyGate CLI\n'
+    printf "export PATH='${runtime}/bin':\"\$PATH\"\n"
+  } >> "$mock_rc"
+  printf 'export EDITOR=vim\n' >> "$mock_rc"
+
+  (
+    cd "$fixture"
+    HOME="$TMP_DIR" SHELL="/bin/zsh" EASYGATE_HOME="$runtime" PATH="${bin}:$PATH" EASYGATE_MOCK_LOG="$log" \
+      bash scripts/uninstall.sh
+  )
+
+  # CLI 二进制已删除
+  assert_missing "${runtime}/bin/easygate"
+  # PATH 配置行已从 shell 配置中移除
+  if grep -qs "${runtime}/bin" "$mock_rc" 2>/dev/null; then
+    fail "uninstall 未删除 shell 配置文件中的 EasyGate PATH 行"
+  fi
+  # 其余内容保留
+  if ! grep -qs "EDITOR=vim" "$mock_rc" 2>/dev/null; then
+    fail "uninstall 删除了 shell 配置文件中非 EasyGate 的内容"
+  fi
+}
+
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 run_deploy_behavior_test
@@ -416,5 +518,7 @@ run_native_cleanup_behavior_test
 run_standalone_cli_behavior_test
 run_install_behavior_test
 run_install_pipe_behavior_test
+run_validation_behavior_test
+run_uninstall_behavior_test
 
 info "行为测试通过"
