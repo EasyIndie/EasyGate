@@ -121,15 +121,9 @@ $EasyGatePs = Get-Content -Raw scripts/easygate.ps1
 $InstallSh = Get-Content -Raw scripts/install.sh
 $InstallPs = Get-Content -Raw scripts/install.ps1
 
-  Fail "deploy.sh 缺少 cloudflared 自动安装开关"
-}
 $LibSh = Get-Content -Raw scripts/lib.sh
 if ($LibSh -notmatch "EASYGATE_CLOUDFLARED_HOME") {
   Fail "lib.sh 缺少 cloudflared home 覆盖入口"
-}
-  Fail "deploy.sh 缺少 EASYGATE_HOME 运行时目录"
-}
-}
 }
 if ($EasyGateSh -notmatch "EASYGATE_HOME") {
   Fail "easygate CLI 缺少 EASYGATE_HOME 运行时目录"
@@ -156,14 +150,12 @@ if ($EasyGateSh -notmatch "cloudflared-linux-") {
 if ($EasyGateSh -notmatch "cloudflared-darwin-") {
   Fail "easygate CLI 缺少 macOS cloudflared 下载逻辑"
 }
-}
 if ($EasyGatePs -notmatch "cloudflared-windows-") {
   Fail "easygate.ps1 缺少 Windows cloudflared 下载逻辑"
 }
 
 Write-Info "检查原生模式入口"
 $LocalNativePs = Get-Content -Raw scripts/local-acceptance-native.ps1
-}
 if ($LibSh -notmatch "traefik_v") {
   Fail "lib.sh 缺少 Traefik 下载逻辑"
 }
