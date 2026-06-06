@@ -773,6 +773,53 @@ function Cleanup-Native {
   }
 }
 
+function Start-Services {
+  Invoke-EasyGateCompose start
+  Write-Info "服务已启动"
+}
+
+function Stop-Services {
+  Invoke-EasyGateCompose stop
+  Write-Info "服务已停止，配置和凭据已保留"
+}
+
+function Restart-Services {
+  Invoke-EasyGateCompose restart
+  Write-Info "服务已重启"
+}
+
+function Invoke-Purge {
+  Write-Warn "即将删除运行时目录 ${EasyGateHome}，包括本地配置、二进制和 tunnel 凭据。该操作不会删除 Cloudflare 上的 DNS 记录或 tunnel。"
+  $Confirm = if ([string]::IsNullOrWhiteSpace($env:EASYGATE_CONFIRM_PURGE)) {
+    Read-Host "确认继续？输入 yes"
+  } else { $env:EASYGATE_CONFIRM_PURGE }
+  if ($Confirm -ne "yes") {
+    Write-Warn "已取消清理"
+    return
+  }
+  # Stop compose services
+  if ((Test-Path $ComposeFile) -and (Test-Path $ComposeEnv) -and (Get-Command docker -ErrorAction SilentlyContinue)) {
+    try { Invoke-EasyGateCompose down --remove-orphans } catch { }
+  }
+  if (Test-Path $EasyGateHome) {
+    Remove-Item -Recurse -Force $EasyGateHome
+    Write-Info "已删除 ${EasyGateHome}"
+  }
+  Write-Info "清理完成。Cloudflare 侧资源如需删除，请使用 cloudflared CLI 或 Cloudflare Dashboard 手动处理。"
+}
+
+function Invoke-Uninstall {
+  # Stop services if any are running
+  try { Invoke-EasyGateCompose down --remove-orphans } catch { Write-Warn "停止服务失败（可能未部署）" }
+  # Clean PATH from shell config (Windows does not auto-add PATH)
+  $Target = Join-Path $EasyGateHome "bin\easygate.ps1"
+  if (Test-Path $Target) {
+    Remove-Item $Target -Force
+    Write-Info "已删除 CLI：${Target}"
+  }
+  Write-Info "卸载完成"
+}
+
 # 手动解析子命令，避免 PS7 参数绑定问题
 if ($CommandArgs.Count -eq 0) {
   Show-Usage
@@ -792,30 +839,38 @@ switch ($Command) {
     $NativeRest = if ($Rest.Count -gt 1) { $Rest[1..($Rest.Count - 1)] } else { @() }
     switch ($NativeCommand) {
       "deploy" { Deploy-Native $NativeRest }
-      "cleanup" { $Options = Parse-Options $NativeRest; Cleanup-Native (Test-Option $Options "Purge") }
-      "purge" { Cleanup-Native $true }
       "logs" { Get-ChildItem (Join-Path $EasyGateHome "logs") -Filter "native-*.log" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "==> $($_.FullName)"; Get-Content $_.FullName -Tail 80 } }
       default { Fail "未知 native 命令：$NativeCommand" }
     }
   }
-  "cleanup" { $Options = Parse-Options $Rest; Cleanup-Compose (Test-Option $Options "Purge") }
-  "purge" { Cleanup-Compose $true }
+  "start" { Start-Services }
+  "stop" { Stop-Services }
+  "restart" { Restart-Services }
+  "purge" { Invoke-Purge }
   "ps" { Invoke-EasyGateCompose ps }
   "logs" { Invoke-EasyGateCompose logs -f traefik cloudflared }
   "config" { Invoke-EasyGateCompose config }
-  "up" { Invoke-EasyGateCompose up -d }
-  "down" { Invoke-EasyGateCompose down }
   "demo" {
-    if ($Rest.Count -gt 0 -and $Rest[0] -eq "cleanup") {
-      Invoke-EasyGateCompose --profile demo stop demo-api demo-test-api
-      Invoke-EasyGateCompose --profile demo rm -f demo-api demo-test-api
-    }
-    else {
-      Invoke-EasyGateCompose --profile demo up -d demo-api demo-test-api
+    $DemoSub = if ($Rest.Count -gt 0) { $Rest[0] } else { "start" }
+    switch ($DemoSub) {
+      "start" { Invoke-EasyGateCompose --profile demo up -d demo-api demo-test-api }
+      "stop" {
+        Invoke-EasyGateCompose --profile demo stop demo-api demo-test-api
+        Invoke-EasyGateCompose --profile demo rm -f demo-api demo-test-api
+      }
+      "restart" {
+        Invoke-EasyGateCompose --profile demo stop demo-api demo-test-api
+        Invoke-EasyGateCompose --profile demo rm -f demo-api demo-test-api
+        Invoke-EasyGateCompose --profile demo up -d demo-api demo-test-api
+      }
+      default { Fail "未知 demo 子命令：$DemoSub。可用：start|stop|restart" }
     }
   }
   "home" { Write-Host $EasyGateHome }
   "version" { Write-Host $Version }
+  "uninstall" {
+    Invoke-Uninstall
+  }
   "-h" { Show-Usage }
   "--help" { Show-Usage }
   default { Fail "未知命令：$Command" }
