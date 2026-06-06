@@ -61,8 +61,14 @@ function Show-Usage {
   easygate.ps1 start|stop|restart      服务管理（自动检测模式）
   easygate.ps1 ps|logs|config          状态与日志（自动检测模式）
   easygate.ps1 demo start|stop|restart Demo 服务（自动检测模式）
+  easygate.ps1 service add|remove|list  自定义服务管理（自动检测模式）
   easygate.ps1 uninstall               卸载
   easygate.ps1 home|version            信息查询
+
+service 子命令：
+  easygate.ps1 service add -Name <name> -Host <hostname> -Url <url>
+  easygate.ps1 service remove <name>
+  easygate.ps1 service list
 
 常用选项：
   -Domain <domain>       主域名，例如 example.com
@@ -859,6 +865,72 @@ function Stop-NativeServices {
   Stop-PidFile (Join-Path $EasyGateHome "run\native-demo-test-api.pid")
 }
 
+# ── Service management (add/remove/list) ─────────────────────────────
+
+function Get-ServiceYamlPath {
+  $Mode = Detect-Mode
+  switch ($Mode) {
+    "compose" { return Join-Path $EasyGateHome "traefik\dynamic\localhost-services.yml" }
+    "native" { return Join-Path $EasyGateHome "native\dynamic\services.yml" }
+    default { return Join-Path $EasyGateHome "native\dynamic\services.yml" }
+  }
+}
+
+function Get-ServiceHelper {
+  $Helper = Join-Path $EasyGateHome "lib\service-helper.py"
+  if (Test-Path $Helper) { return $Helper }
+  $SourceHelper = Join-Path $PSScriptRoot "service-helper.py"
+  if (Test-Path $SourceHelper) { return (Resolve-Path $SourceHelper).Path }
+  return $null
+}
+
+function Invoke-ServiceHelper {
+  param([string[]]$Args)
+  $Helper = Get-ServiceHelper
+  if (-not $Helper) { Fail "service-helper.py 不可用" }
+  $Python = Get-Command "python3" -ErrorAction SilentlyContinue
+  if (-not $Python) { $Python = Get-Command "python" -ErrorAction SilentlyContinue }
+  if (-not $Python) { Fail "需要 python3 或 python" }
+  & $Python.Source $Helper @Args
+}
+  param([string[]]$Args)
+  $Name = $Host = $Url = $null
+  for ($i = 0; $i -lt $Args.Count; $i++) {
+    switch -Regex ($Args[$i]) {
+      '^--?name$|^-Name$' { $i++; $Name = $Args[$i] }
+      '^--?host$|^-Host$' { $i++; $Host = $Args[$i] }
+      '^--?url$|^-Url$' { $i++; $Url = $Args[$i] }
+      default { Fail "未知参数：$($Args[$i])" }
+    }
+  }
+  if (-not $Name) { Fail "缺少 -Name（服务名称）" }
+  if (-not $Host) { Fail "缺少 -Host（访问域名，如 app.example.com）" }
+  if (-not $Url) { Fail "缺少 -Url（上游地址，如 http://192.168.1.100:8080）" }
+
+  $YamlFile = Get-ServiceYamlPath
+  New-Item -ItemType Directory -Force -Path (Split-Path $YamlFile) | Out-Null
+  Invoke-ServiceHelper add $YamlFile $Name $Host $Url
+}
+
+function Start-ServiceRemove {
+  param([string[]]$Args)
+  $Name = if ($Args.Count -gt 0) { $Args[0] } else { $null }
+  if (-not $Name) { Fail "用法：easygate.ps1 service remove <name>" }
+
+  $YamlFile = Get-ServiceYamlPath
+  if (-not (Test-Path $YamlFile)) { Fail "服务配置文件不存在：$YamlFile" }
+  Invoke-ServiceHelper remove $YamlFile $Name
+}
+
+function Start-ServiceList {
+  $YamlFile = Get-ServiceYamlPath
+  if (-not (Test-Path $YamlFile)) {
+    Write-Info "暂无已配置的服务"
+    return
+  }
+  Invoke-ServiceHelper list $YamlFile
+}
+
 function Invoke-Uninstall {
   # Stop native services (traefik + cloudflared)
   Stop-NativeServices
@@ -981,6 +1053,16 @@ switch ($Command) {
         }
       }
       default { Fail "未找到已部署的服务，请先执行 easygate.ps1 deploy" }
+    }
+  }
+  "service" {
+    $ServiceSub = if ($Rest.Count -gt 0) { $Rest[0] } else { "" }
+    $ServiceRest = if ($Rest.Count -gt 1) { $Rest[1..($Rest.Count - 1)] } else { @() }
+    switch ($ServiceSub) {
+      "add" { Start-ServiceAdd $ServiceRest }
+      "remove" { Start-ServiceRemove $ServiceRest }
+      "list" { Start-ServiceList }
+      default { Fail "未知 service 子命令：${ServiceSub}。可用：add|remove|list" }
     }
   }
   "home" { Write-Host $EasyGateHome }
