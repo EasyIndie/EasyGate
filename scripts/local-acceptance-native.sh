@@ -64,7 +64,7 @@ TEST_HOST="test-api.${BASE_DOMAIN}"
 
 info "等待原生 Traefik 就绪"
 ready=false
-for _ in {1..30}; do
+for _ in {1..15}; do
   if curl -fsS -H "Host: ${PROD_HOST}" "http://127.0.0.1:${TRAEFIK_HTTP_PORT}" >/dev/null 2>&1; then
     ready=true
     break

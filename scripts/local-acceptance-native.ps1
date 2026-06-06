@@ -75,7 +75,7 @@ try {
 
   Write-Info "等待原生 Traefik 就绪"
   $Ready = $false
-  for ($i = 0; $i -lt 30; $i++) {
+  for ($i = 0; $i -lt 15; $i++) {
     try {
       $Response = Request-Host $ProdHost
       if ($Response.StatusCode -eq 200) {

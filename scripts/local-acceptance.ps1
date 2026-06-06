@@ -54,7 +54,7 @@ function Compose-Up {
       }
       catch {
       }
-      Start-Sleep -Seconds 5
+      Start-Sleep -Seconds 2
     }
   }
 
@@ -73,6 +73,14 @@ Set-Location $RootDir
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
   Skip-Or-Fail "未找到 docker"
+}
+
+# 快速检测 Docker 是否可用，避免 docker info 长时间挂起
+if ($IsWindows) {
+  $dockerSvc = Get-Service -Name "docker" -ErrorAction SilentlyContinue
+  if (-not $dockerSvc -or $dockerSvc.Status -ne "Running") {
+    Skip-Or-Fail "Docker 服务未运行"
+  }
 }
 
 try {

@@ -119,14 +119,12 @@ exit 0
 "@ | Set-Content -Path $TraefikScript -Encoding UTF8
 
   if ($IsWindows) {
-    # Use .bat wrappers that call pwsh -File.  Both .bat and .cmd are
-    # matched by PATHEXT; we use .bat so the file is found even if a
-    # real docker.exe exists on the runner.
-    "@pwsh -NoProfile -ExecutionPolicy Bypass -File `"$DockerScript`" %*" |
+    # 使用 PowerShell 5.1 启动 mock，比 pwsh 7 快 1-2s
+    "@powershell -NoProfile -NoLogo -ExecutionPolicy Bypass -File `"$DockerScript`" %*" |
       Set-Content -Path (Join-Path $BinDir "docker.bat") -Encoding ASCII
-    "@pwsh -NoProfile -ExecutionPolicy Bypass -File `"$CloudflaredScript`" %*" |
+    "@powershell -NoProfile -NoLogo -ExecutionPolicy Bypass -File `"$CloudflaredScript`" %*" |
       Set-Content -Path (Join-Path $BinDir "cloudflared.bat") -Encoding ASCII
-    "@pwsh -NoProfile -ExecutionPolicy Bypass -File `"$TraefikScript`" %*" |
+    "@powershell -NoProfile -NoLogo -ExecutionPolicy Bypass -File `"$TraefikScript`" %*" |
       Set-Content -Path (Join-Path $BinDir "traefik.bat") -Encoding ASCII
   }
   else {
