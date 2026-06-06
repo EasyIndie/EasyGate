@@ -255,19 +255,29 @@ prepare_tunnel_credentials() {
       return
     fi
     rm -f "$tmp_config"
-    warn "tunnel 凭据验证失败，将删除并重建 tunnel"
-    cloudflared tunnel delete "$tunnel_name" >/dev/null 2>&1 || true
+    warn "tunnel 凭据验证失败，尝试重新获取凭据"
     rm -f "$target"
   fi
 
   info "创建 Cloudflare Tunnel：${tunnel_name}"
-  if ! cloudflared tunnel create "$tunnel_name"; then
-    warn "tunnel ${tunnel_name} 已存在，先删除再重建以获取新凭据"
-    cloudflared tunnel delete "$tunnel_name" >/dev/null 2>&1 || true
-    cloudflared tunnel create "$tunnel_name" >/dev/null 2>&1 || warn "重建 tunnel 失败，将尝试复用已有凭据"
+  if ! cloudflared tunnel create "$tunnel_name" >/dev/null 2>&1; then
+    # tunnel 已存在，通过 token 获取凭据（不删除已有 tunnel）
+    warn "tunnel ${tunnel_name} 已存在，通过 token 获取凭据"
+    credentials_tmp="$(mktemp "${EASYGATE_HOME}/cloudflared/${tunnel_name}.json.XXXXXX")"
+    if cloudflared tunnel token "$tunnel_name" 2>/dev/null | grep -q '^eyJ' && \
+       cloudflared tunnel token "$tunnel_name" 2>/dev/null | head -1 | base64 -d > "$credentials_tmp" 2>/dev/null && \
+       [[ -s "$credentials_tmp" ]]; then
+      chmod 600 "$credentials_tmp"
+      mv -f "$credentials_tmp" "$target"
+      info "已通过 token 获取 tunnel 凭据"
+      return
+    fi
+    rm -f "$credentials_tmp"
+    error "无法获取已有 tunnel 的凭据，请手动执行: cloudflared tunnel token ${tunnel_name}"
+    exit 1
   fi
 
-  # 从 ~/.cloudflared/ 获取新创建的凭据
+  # 新创建的 tunnel，从 ~/.cloudflared/ 找到凭据文件
   credentials_source="$(find_latest_credentials "${CLOUDFLARED_HOME}" || true)"
 
   if [[ -z "$credentials_source" || ! -f "$credentials_source" ]]; then
