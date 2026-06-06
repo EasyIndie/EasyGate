@@ -43,11 +43,12 @@ easygate deploy --domain example.com
 | `--port` | 本地调试端口 | `18080` |
 | `--demo` | 部署后启动 demo 服务 | 否 |
 | `--skip-route` | 不自动创建 DNS 路由 | 否 |
+| `--no-install-cloudflared` | 不自动下载 cloudflared | 否 |
 
 ### 原生模式（无 Docker）
 
 ```sh
-easygate native deploy --domain example.com
+easygate deploy --native --domain example.com
 ```
 
 适用于不想安装 Docker 的设备。自动下载 Traefik 二进制，配置写入 `~/.easygate/native/`，启动后台进程并注册系统服务（systemd/launchd），设备重启后自动恢复。
@@ -59,9 +60,11 @@ easygate native deploy --domain example.com
 | `--api-port` | demo api 端口 | `19080` |
 | `--test-api-port` | demo test-api 端口 | `19081` |
 | `--local-only` | 仅启动 Traefik，不启动 cloudflared | 否 |
+| `--no-install-cloudflared` | 不自动下载 cloudflared | 否 |
+| `--no-install-traefik` | 不自动下载 Traefik | 否 |
 
 ```sh
-easygate native deploy --domain example.com --demo --local-only
+easygate deploy --native --domain example.com --demo --local-only
 ```
 
 ## 服务管理
@@ -72,13 +75,14 @@ easygate stop           # 停止服务（保留配置和凭据）
 easygate restart        # 重启服务
 easygate ps             # 查看状态（compose: 容器状态 / native: PID 列表）
 easygate logs           # 查看日志
-easygate native logs    # 原生模式日志
-easygate config         # 渲染 Compose 配置（仅 Docker 模式）
+easygate config         # 查看配置
 easygate home           # 显示 ~/.easygate 路径
 easygate version        # 显示版本号
 ```
 
 ## Demo 服务
+
+两种模式均支持，自动检测：
 
 ```sh
 easygate demo start     # 启动 demo（api + test-api）

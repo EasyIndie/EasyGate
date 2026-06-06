@@ -64,7 +64,7 @@ function Request-Host {
 try {
   Write-Info "启动原生本机验收栈"
   try {
-    & $EasyGateCli native deploy -Domain "example.com" -Demo -LocalOnly
+    & $EasyGateCli deploy -Native -Domain "example.com" -Demo -LocalOnly
   }
   catch {
     Skip-Or-Fail "原生本机验收栈启动失败"
@@ -123,7 +123,7 @@ try {
   Write-Info "原生本机路由验收通过"
 }
 finally {
-  & $EasyGateCli native cleanup | Out-Null
+  & $EasyGateCli uninstall | Out-Null
   if ($HadEnv) {
     Copy-Item $EnvBackup ".env" -Force
   }

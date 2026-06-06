@@ -50,24 +50,26 @@ error() {
 usage() {
   cat <<'EOF_USAGE'
 用法：
-  easygate deploy --domain <domain> [选项]
-  easygate native deploy --domain <domain> [选项]
-  easygate start|stop|restart      服务管理
-  easygate ps|logs|config          状态与日志
-  easygate demo start|stop|restart Demo 服务
+  easygate deploy --domain <domain> [--native] [选项]
+  easygate start|stop|restart      服务管理（自动检测模式）
+  easygate ps|logs|config          状态与日志（自动检测模式）
+  easygate demo start|stop|restart Demo 服务（自动检测模式）
   easygate uninstall               停止服务 + 删除所有数据 + 清理 PATH
   easygate home|version            信息查询
 
 常用选项：
   --domain <domain>       主域名，例如 example.com
+  --native                使用原生模式部署（无需 Docker）
   --tunnel <name>         tunnel 名称，默认 easygate-home
   --dashboard <hostname>  Traefik dashboard 域名，默认 traefik.<domain>
   --port <port>           本地调试端口，默认 18080
   --skip-route            不自动创建 *.domain 的 DNS 路由
   --demo                  部署后启动 demo 服务
   --no-install-cloudflared
-  --no-install-traefik    仅 native deploy 支持
-  --local-only            仅 native deploy 支持
+  --no-install-traefik    仅 --native 模式支持
+  --local-only            仅 --native 模式支持
+  --api-port <port>       仅 --native 模式，demo api 端口，默认 19080
+  --test-api-port <port>  仅 --native 模式，demo test-api 端口，默认 19081
 EOF_USAGE
 }
 
@@ -579,7 +581,7 @@ assert_no_native_deployment() {
     "${EASYGATE_HOME}/run/native-demo-api.pid" \
     "${EASYGATE_HOME}/run/native-demo-test-api.pid"; do
     if native_pid_active "$file"; then
-      error "检测到原生模式进程正在运行：${file}。请先执行 easygate native cleanup。"
+      error "检测到原生模式进程正在运行：${file}。请先执行 easygate stop 停止原生进程。"
       exit 1
     fi
   done
@@ -690,6 +692,8 @@ EOF_CONFIG
     info "启动演示服务"
     compose --profile demo up -d demo-api demo-test-api
   fi
+
+  write_mode_file "compose"
 
   info "部署完成"
   printf '\n后续检查：\n'
@@ -1039,14 +1043,12 @@ EOF_CLOUDFLARED
       ;;
   esac
 
+  write_mode_file "native"
+
   info "原生部署完成"
   printf '\n后续检查：\n'
-  printf '  easygate native logs\n'
+  printf '  easygate logs\n'
   printf '  运行时目录：%s\n' "$EASYGATE_HOME"
-}
-
-native_logs() {
-  tail -f "${EASYGATE_HOME}/logs/native-traefik.log" "${EASYGATE_HOME}/logs/native-cloudflared.log"
 }
 
 # ── Service management helpers ───────────────────────────────────────
@@ -1067,6 +1069,12 @@ detect_mode() {
     return
   fi
   echo ""
+}
+
+# 写入部署模式标记文件，供 detect_mode 读取
+write_mode_file() {
+  local mode="$1"
+  printf '%s\n' "$mode" > "${EASYGATE_HOME}/.mode"
 }
 
 start_services() {
@@ -1172,6 +1180,28 @@ stop_native_services() {
   fi
 }
 
+# 原生模式 demo 进程管理
+start_native_demo() {
+  local env_file="${EASYGATE_HOME}/native/.env"
+  [[ -f "$env_file" ]] || { error "未找到原生模式环境文件：${env_file}"; return 1; }
+  # shellcheck source=/dev/null
+  source "$env_file"
+  local python_bin
+  python_bin="$(find_python)" || { error "原生 demo 需要 python3 或 python"; return 1; }
+  local api_port="${EASYGATE_NATIVE_API_PORT:-19080}"
+  local test_api_port="${EASYGATE_NATIVE_TEST_API_PORT:-19081}"
+  write_native_demo_server
+  start_process "native-demo-api" "$python_bin" "${EASYGATE_HOME}/lib/native-demo-server.py" --port "$api_port"
+  start_process "native-demo-test-api" "$python_bin" "${EASYGATE_HOME}/lib/native-demo-server.py" --port "$test_api_port"
+  info "原生 demo 服务已启动"
+}
+
+stop_native_demo() {
+  stop_pid_file "${EASYGATE_HOME}/run/native-demo-api.pid"
+  stop_pid_file "${EASYGATE_HOME}/run/native-demo-test-api.pid"
+  info "原生 demo 服务已停止"
+}
+
 # 注销系统服务（purge/uninstall 时调用，彻底清除注册）
 unregister_native_services() {
   case "$(uname -s)" in
@@ -1215,28 +1245,73 @@ cmd="${1:-}"
 if [[ $# -gt 0 ]]; then shift; fi
 
 case "$cmd" in
-  deploy) deploy_compose "$@" ;;
+  deploy)
+    native_mode=false; deploy_args=()
+    for arg in "$@"; do
+      if [[ "$arg" == "--native" ]]; then native_mode=true
+      else deploy_args+=("$arg"); fi
+    done
+    if [[ "$native_mode" == true ]]; then deploy_native "${deploy_args[@]}"
+    else deploy_compose "${deploy_args[@]}"; fi
+    ;;
   start) start_services "$@" ;;
   stop) stop_services "$@" ;;
   restart) restart_services "$@" ;;
   ps|status) show_status "$@" ;;
-  logs) native_logs 2>/dev/null; compose logs -f traefik cloudflared "$@" 2>/dev/null || true ;;
-  config) compose config "$@" ;;
+  logs)
+    mode="$(detect_mode)"
+    case "$mode" in
+      compose) compose logs -f traefik cloudflared "$@" ;;
+      native)
+        tail -f "${EASYGATE_HOME}/logs/native-traefik.log" "${EASYGATE_HOME}/logs/native-cloudflared.log" "$@"
+        ;;
+      *) error "未找到已部署的服务，请先执行 easygate deploy" ; exit 1 ;;
+    esac
+    ;;
+  config)
+    mode="$(detect_mode)"
+    case "$mode" in
+      compose) compose config "$@" ;;
+      native)
+        info "=== Traefik 配置 ==="
+        cat "${EASYGATE_HOME}/native/traefik.yml" 2>/dev/null || error "未找到 Traefik 配置"
+        if [[ -f "${EASYGATE_HOME}/cloudflared/config.native.yml" ]]; then
+          echo ""
+          info "=== Cloudflared 配置 ==="
+          cat "${EASYGATE_HOME}/cloudflared/config.native.yml"
+        fi
+        ;;
+      *) error "未找到已部署的服务，请先执行 easygate deploy" ; exit 1 ;;
+    esac
+    ;;
   demo)
+    mode="$(detect_mode)"
     subcmd="${1:-start}"
     [[ "${1:-}" != "" ]] && shift || true
-    case "$subcmd" in
-      start) compose --profile demo up -d "$@" ;;
-      stop)
-        compose --profile demo stop demo-api demo-test-api "$@"
-        compose --profile demo rm -f demo-api demo-test-api "$@"
+    case "$mode" in
+      compose)
+        case "$subcmd" in
+          start) compose --profile demo up -d "$@" ;;
+          stop)
+            compose --profile demo stop demo-api demo-test-api "$@"
+            compose --profile demo rm -f demo-api demo-test-api "$@"
+            ;;
+          restart)
+            compose --profile demo stop demo-api demo-test-api "$@"
+            compose --profile demo rm -f demo-api demo-test-api "$@"
+            compose --profile demo up -d "$@"
+            ;;
+          *) error "未知 demo 子命令：${subcmd}。可用：start|stop|restart"; usage; exit 1 ;;
+        esac
         ;;
-      restart)
-        compose --profile demo stop demo-api demo-test-api "$@"
-        compose --profile demo rm -f demo-api demo-test-api "$@"
-        compose --profile demo up -d "$@"
+      native)
+        case "$subcmd" in
+          start|restart) start_native_demo ;;
+          stop) stop_native_demo ;;
+          *) error "未知 demo 子命令：${subcmd}。可用：start|stop|restart"; usage; exit 1 ;;
+        esac
         ;;
-      *) error "未知 demo 子命令：${subcmd}。可用：start|stop|restart"; usage; exit 1 ;;
+      *) error "未找到已部署的服务，请先执行 easygate deploy" ; exit 1 ;;
     esac
     ;;
   home) printf '%s\n' "$EASYGATE_HOME" ;;
@@ -1262,15 +1337,6 @@ case "$cmd" in
       info "已删除运行时目录 ${EASYGATE_HOME}"
     fi
     info "卸载完成。Cloudflare 侧资源如需删除，请使用 cloudflared CLI 或 Cloudflare Dashboard 手动处理。"
-    ;;
-  native)
-    subcmd="${1:-}"
-    if [[ $# -gt 0 ]]; then shift; fi
-    case "$subcmd" in
-      deploy) deploy_native "$@" ;;
-      logs) native_logs "$@" ;;
-      *) usage; exit 1 ;;
-    esac
     ;;
   -h|--help|"") usage ;;
   *) error "未知命令：$cmd"; usage; exit 1 ;;

@@ -57,24 +57,26 @@ function Fail {
 function Show-Usage {
   @"
 用法：
-  easygate.ps1 deploy -Domain <domain> [选项]
-  easygate.ps1 native deploy -Domain <domain> [选项]
-  easygate.ps1 start|stop|restart      服务管理
-  easygate.ps1 ps|logs|config          状态与日志
-  easygate.ps1 demo start|stop|restart Demo 服务
+  easygate.ps1 deploy -Domain <domain> [-Native] [选项]
+  easygate.ps1 start|stop|restart      服务管理（自动检测模式）
+  easygate.ps1 ps|logs|config          状态与日志（自动检测模式）
+  easygate.ps1 demo start|stop|restart Demo 服务（自动检测模式）
   easygate.ps1 uninstall               卸载
   easygate.ps1 home|version            信息查询
 
 常用选项：
   -Domain <domain>       主域名，例如 example.com
+  -Native                使用原生模式部署（无需 Docker）
   -Tunnel <name>         tunnel 名称，默认 easygate-home
   -Dashboard <hostname>  Traefik dashboard 域名，默认 traefik.<domain>
   -Port <port>           本地调试端口，默认 18080
   -SkipRoute             不自动创建 *.domain 的 DNS 路由
   -Demo                  部署后启动 demo 服务
   -NoInstallCloudflared
-  -NoInstallTraefik      仅 native deploy 支持
-  -LocalOnly             仅 native deploy 支持
+  -NoInstallTraefik      仅 -Native 模式支持
+  -LocalOnly             仅 -Native 模式支持
+  -ApiPort <port>        仅 -Native 模式，demo api 端口，默认 19080
+  -TestApiPort <port>    仅 -Native 模式，demo test-api 端口，默认 19081
 "@
 }
 
@@ -121,6 +123,26 @@ function Parse-Options {
     }
   }
   return $Options
+}
+
+function Write-ModeFile {
+  param([string]$Mode)
+  Set-Content -Path (Join-Path $EasyGateHome ".mode") -Value "$Mode" -Encoding UTF8 -NoNewline
+}
+
+function Detect-Mode {
+  $ModeFile = Join-Path $EasyGateHome ".mode"
+  if (Test-Path $ModeFile) {
+    return (Get-Content $ModeFile).Trim()
+  }
+  # Fallback: check PID files for native, compose files for Docker
+  if (Test-Path (Join-Path $EasyGateHome "run\native-traefik.pid")) {
+    return "native"
+  }
+  if ((Test-Path $ComposeFile) -and (Test-Path $ComposeEnv)) {
+    return "compose"
+  }
+  return ""
 }
 
 function Prompt-Default {
@@ -398,7 +420,7 @@ function Assert-NoNativeDeployment {
     (Join-Path $EasyGateHome "run\native-demo-test-api.pid")
   ) | ForEach-Object {
     if (Test-NativeProcessActive $_) {
-      Fail "检测到原生模式进程正在运行：$_。请先执行 easygate.ps1 native cleanup。"
+      Fail "检测到原生模式进程正在运行：$_。请先执行 easygate.ps1 stop 停止原生进程。"
     }
   }
 }
@@ -511,6 +533,7 @@ function Deploy-Compose {
     Invoke-EasyGateCompose --profile demo up -d demo-api demo-test-api
   }
   Write-Info "部署完成"
+  Write-ModeFile "compose"
   Write-Host ""
   Write-Host "后续检查："
   Write-Host "  easygate.ps1 ps"
@@ -599,6 +622,35 @@ def main():
 if __name__ == "__main__":
     main()
 '@ | Set-Content -Path (Join-Path $LibDir "native-demo-server.py") -Encoding UTF8
+}
+
+function Start-NativeDemo {
+  $EnvFile = Join-Path $EasyGateHome "native\.env"
+  if (-not (Test-Path $EnvFile)) {
+    Fail "未找到原生模式环境文件：$EnvFile"
+  }
+  $EnvLines = Get-Content $EnvFile
+  $ApiPort = "19080"
+  $TestApiPort = "19081"
+  foreach ($Line in $EnvLines) {
+    if ($Line -match "^EASYGATE_NATIVE_API_PORT=(.+)") { $ApiPort = $matches[1] }
+    if ($Line -match "^EASYGATE_NATIVE_TEST_API_PORT=(.+)") { $TestApiPort = $matches[1] }
+  }
+  $Python = Find-Python
+  if (-not $Python) {
+    Fail "原生 demo 需要 python3 或 python"
+  }
+  Write-NativeDemoServer
+  $DemoScript = Join-Path $EasyGateHome "lib\native-demo-server.py"
+  Start-NativeProcess "native-demo-api" $Python @($DemoScript, "--port", $ApiPort)
+  Start-NativeProcess "native-demo-test-api" $Python @($DemoScript, "--port", $TestApiPort)
+  Write-Info "原生 demo 服务已启动"
+}
+
+function Stop-NativeDemo {
+  Stop-PidFile (Join-Path $EasyGateHome "run\native-demo-api.pid")
+  Stop-PidFile (Join-Path $EasyGateHome "run\native-demo-test-api.pid")
+  Write-Info "原生 demo 服务已停止"
 }
 
 function Deploy-Native {
@@ -734,10 +786,11 @@ http:
   }
 
   Write-Info "原生部署完成"
+  Write-ModeFile "native"
   Write-Host ""
   Write-Host "后续检查："
-  Write-Host "  easygate.ps1 native logs"
-  Write-Host "  easygate.ps1 native cleanup"
+  Write-Host "  easygate.ps1 logs"
+  Write-Host "  easygate.ps1 uninstall"
   Write-Host "  运行时目录：$EasyGateHome"
   Write-Host "  本地调试入口：http://127.0.0.1:$Port"
   Write-Host "  https://api.$Domain"
@@ -745,18 +798,63 @@ http:
 }
 
 function Start-Services {
-  Invoke-EasyGateCompose start
-  Write-Info "服务已启动"
+  $Mode = Detect-Mode
+  switch ($Mode) {
+    "compose" { Invoke-EasyGateCompose start; Write-Info "服务已启动" }
+    "native" { Start-NativeServices }
+    default { Fail "未找到已部署的服务，请先执行 easygate.ps1 deploy" }
+  }
 }
 
 function Stop-Services {
-  Invoke-EasyGateCompose stop
-  Write-Info "服务已停止，配置和凭据已保留"
+  $Mode = Detect-Mode
+  switch ($Mode) {
+    "compose" { Invoke-EasyGateCompose stop; Write-Info "服务已停止，配置和凭据已保留" }
+    "native" { Stop-NativeServices }
+    default { Fail "未找到已部署的服务，请先执行 easygate.ps1 deploy" }
+  }
 }
 
 function Restart-Services {
-  Invoke-EasyGateCompose restart
-  Write-Info "服务已重启"
+  $Mode = Detect-Mode
+  switch ($Mode) {
+    "compose" { Invoke-EasyGateCompose restart; Write-Info "服务已重启" }
+    "native" { Stop-NativeServices; Start-NativeServices; Write-Info "服务已重启" }
+    default { Fail "未找到已部署的服务，请先执行 easygate.ps1 deploy" }
+  }
+}
+
+function Start-NativeServices {
+  $EnvFile = Join-Path $EasyGateHome "native\.env"
+  if (-not (Test-Path $EnvFile)) {
+    Fail "未找到原生模式环境文件：$EnvFile"
+  }
+  # 读取环境文件
+  $EnvLines = Get-Content $EnvFile
+  $TraefikPort = "18080"
+  foreach ($Line in $EnvLines) {
+    if ($Line -match "^TRAEFIK_HTTP_PORT=(.+)") { $TraefikPort = $matches[1] }
+    if ($Line -match "^EASYGATE_DEPLOY_MODE=(.+)") { $DeployMode = $matches[1] }
+  }
+  # 端口检查
+  # (basic check - skip for now, same as before)
+  if (-not (Get-Command traefik -ErrorAction SilentlyContinue)) {
+    Fail "缺少命令：traefik"
+  }
+  Start-NativeProcess "native-traefik" "traefik" @("--configFile", (Join-Path $EasyGateHome "native\traefik.yml"))
+  if ($DeployMode -ne "local-only") {
+    if (-not (Get-Command cloudflared -ErrorAction SilentlyContinue)) {
+      Fail "缺少命令：cloudflared"
+    }
+    Start-NativeProcess "native-cloudflared" "cloudflared" @("tunnel", "--config", (Join-Path $EasyGateHome "cloudflared\config.native.yml"), "run")
+  }
+}
+
+function Stop-NativeServices {
+  Stop-PidFile (Join-Path $EasyGateHome "run\native-cloudflared.pid")
+  Stop-PidFile (Join-Path $EasyGateHome "run\native-traefik.pid")
+  Stop-PidFile (Join-Path $EasyGateHome "run\native-demo-api.pid")
+  Stop-PidFile (Join-Path $EasyGateHome "run\native-demo-test-api.pid")
 }
 
 function Invoke-Uninstall {
@@ -781,40 +879,98 @@ $Command = $CommandArgs[0]
 $Rest = if ($CommandArgs.Count -gt 1) { $CommandArgs[1..($CommandArgs.Count - 1)] } else { @() }
 
 switch ($Command) {
-  "deploy" { Deploy-Compose $Rest }
-  "native" {
-    if ($Rest.Count -eq 0) {
-      Show-Usage
-      exit 1
+  "deploy" {
+    $NativeMode = $false
+    $DeployArgs = @()
+    for ($Index = 0; $Index -lt $Rest.Count; $Index++) {
+      if ($Rest[$Index] -eq "-Native" -or $Rest[$Index] -eq "--native") { $NativeMode = $true }
+      else { $DeployArgs += $Rest[$Index] }
     }
-    $NativeCommand = $Rest[0]
-    $NativeRest = if ($Rest.Count -gt 1) { $Rest[1..($Rest.Count - 1)] } else { @() }
-    switch ($NativeCommand) {
-      "deploy" { Deploy-Native $NativeRest }
-      "logs" { Get-ChildItem (Join-Path $EasyGateHome "logs") -Filter "native-*.log" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "==> $($_.FullName)"; Get-Content $_.FullName -Tail 80 } }
-      default { Fail "未知 native 命令：$NativeCommand" }
-    }
+    if ($NativeMode) { Deploy-Native $DeployArgs }
+    else { Deploy-Compose $DeployArgs }
   }
   "start" { Start-Services }
   "stop" { Stop-Services }
   "restart" { Restart-Services }
-  "ps" { Invoke-EasyGateCompose ps }
-  "logs" { Invoke-EasyGateCompose logs -f traefik cloudflared }
-  "config" { Invoke-EasyGateCompose config }
+  "ps" {
+    $Mode = Detect-Mode
+    switch ($Mode) {
+      "compose" { Invoke-EasyGateCompose ps }
+      "native" {
+        Write-Info "原生模式进程状态："
+        @("native-traefik", "native-cloudflared", "native-demo-api", "native-demo-test-api") | ForEach-Object {
+          $PidFile = Join-Path $EasyGateHome "run\$_.pid"
+          $Name = $_ -replace "^native-", ""
+          if (Test-NativeProcessActive $PidFile) {
+            Write-Host "  $($Name.PadRight(15)) running  (pid $(Get-Content $PidFile))"
+          } else {
+            Write-Host "  $($Name.PadRight(15)) stopped"
+          }
+        }
+      }
+      default { Fail "未找到已部署的服务，请先执行 easygate.ps1 deploy" }
+    }
+  }
+  "logs" {
+    $Mode = Detect-Mode
+    switch ($Mode) {
+      "compose" { Invoke-EasyGateCompose logs -f traefik cloudflared }
+      "native" {
+        Get-ChildItem (Join-Path $EasyGateHome "logs") -Filter "native-*.log" -ErrorAction SilentlyContinue | ForEach-Object {
+          Write-Host "==> $($_.FullName)"
+          Get-Content $_.FullName -Tail 80
+        }
+      }
+      default { Fail "未找到已部署的服务，请先执行 easygate.ps1 deploy" }
+    }
+  }
+  "config" {
+    $Mode = Detect-Mode
+    switch ($Mode) {
+      "compose" { Invoke-EasyGateCompose config }
+      "native" {
+        Write-Host "=== Traefik 配置 ==="
+        if (Test-Path (Join-Path $EasyGateHome "native\traefik.yml")) {
+          Get-Content (Join-Path $EasyGateHome "native\traefik.yml")
+        } else { Write-Info "未找到 Traefik 配置" }
+        $CfConfig = Join-Path $EasyGateHome "cloudflared\config.native.yml"
+        if (Test-Path $CfConfig) {
+          Write-Host ""
+          Write-Host "=== Cloudflared 配置 ==="
+          Get-Content $CfConfig
+        }
+      }
+      default { Fail "未找到已部署的服务，请先执行 easygate.ps1 deploy" }
+    }
+  }
   "demo" {
+    $Mode = Detect-Mode
     $DemoSub = if ($Rest.Count -gt 0) { $Rest[0] } else { "start" }
-    switch ($DemoSub) {
-      "start" { Invoke-EasyGateCompose --profile demo up -d demo-api demo-test-api }
-      "stop" {
-        Invoke-EasyGateCompose --profile demo stop demo-api demo-test-api
-        Invoke-EasyGateCompose --profile demo rm -f demo-api demo-test-api
+    switch ($Mode) {
+      "compose" {
+        switch ($DemoSub) {
+          "start" { Invoke-EasyGateCompose --profile demo up -d demo-api demo-test-api }
+          "stop" {
+            Invoke-EasyGateCompose --profile demo stop demo-api demo-test-api
+            Invoke-EasyGateCompose --profile demo rm -f demo-api demo-test-api
+          }
+          "restart" {
+            Invoke-EasyGateCompose --profile demo stop demo-api demo-test-api
+            Invoke-EasyGateCompose --profile demo rm -f demo-api demo-test-api
+            Invoke-EasyGateCompose --profile demo up -d demo-api demo-test-api
+          }
+          default { Fail "未知 demo 子命令：${DemoSub}。可用：start|stop|restart" }
+        }
       }
-      "restart" {
-        Invoke-EasyGateCompose --profile demo stop demo-api demo-test-api
-        Invoke-EasyGateCompose --profile demo rm -f demo-api demo-test-api
-        Invoke-EasyGateCompose --profile demo up -d demo-api demo-test-api
+      "native" {
+        switch ($DemoSub) {
+          "start" { Start-NativeDemo }
+          "restart" { Stop-NativeDemo; Start-NativeDemo }
+          "stop" { Stop-NativeDemo }
+          default { Fail "未知 demo 子命令：${DemoSub}。可用：start|stop|restart" }
+        }
       }
-      default { Fail "未知 demo 子命令：$DemoSub。可用：start|stop|restart" }
+      default { Fail "未找到已部署的服务，请先执行 easygate.ps1 deploy" }
     }
   }
   "home" { Write-Host $EasyGateHome }

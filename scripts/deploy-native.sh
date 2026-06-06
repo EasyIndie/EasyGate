@@ -227,6 +227,7 @@ case "$(uname -s)" in
 esac
 
 info "原生部署完成"
+printf '%s\n' "native" > "${EASYGATE_HOME}/.mode"
 printf '\n后续检查：\n'
 printf '  ./scripts/local-acceptance-native.sh\n'
 printf '  运行时目录：%s\n' "$EASYGATE_HOME"

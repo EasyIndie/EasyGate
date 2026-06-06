@@ -54,7 +54,7 @@ fi
 trap cleanup EXIT
 
 info "启动原生本机验收栈"
-if ! "$EASYGATE_CLI" native deploy --domain example.com --demo --local-only; then
+if ! "$EASYGATE_CLI" deploy --native --domain example.com --demo --local-only; then
   skip_or_fail "原生本机验收栈启动失败"
 fi
 

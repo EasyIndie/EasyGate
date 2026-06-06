@@ -75,7 +75,7 @@ curl -fsSL https://raw.githubusercontent.com/EasyIndie/EasyGate/main/scripts/ins
 再部署：
 
 ```sh
-easygate native deploy --domain example.com --demo
+easygate deploy --native --domain example.com --demo
 ```
 
 原生模式会自动注册系统服务（systemd / launchd），设备重启后进程自动恢复。
@@ -90,8 +90,10 @@ easygate stop               # 停止服务（保留配置）
 easygate restart            # 重启服务
 easygate ps                 # 查看状态
 easygate logs               # 查看日志
+easygate config             # 查看配置
 easygate demo start         # 启动 demo 测试服务
 easygate demo stop          # 停止 demo
+easygate demo restart       # 重启 demo
 easygate uninstall          # 停止服务 + 删除全部数据 + 清理 PATH
 ```
 

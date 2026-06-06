@@ -283,6 +283,7 @@ if [[ "$START_DEMO" == true ]]; then
 fi
 
 info "部署完成"
+printf '%s\n' "compose" > "${EASYGATE_HOME}/.mode"
 printf '\n后续检查：\n'
 printf '  docker compose -p easygate -f "%s" --env-file "%s" ps\n' "$COMPOSE_FILE" "$COMPOSE_ENV"
 printf '  docker compose -p easygate -f "%s" --env-file "%s" logs -f traefik cloudflared\n' "$COMPOSE_FILE" "$COMPOSE_ENV"

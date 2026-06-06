@@ -78,5 +78,5 @@ jobs:
         run: |
           BASE="https://raw.githubusercontent.com/EasyIndie/EasyGate/${TAG_NAME}/scripts/install.sh"
           EXISTING="$(gh release view "$TAG_NAME" --json body -q .body)"
-          NOTES=$(printf '## 一键部署\n\n### Docker Compose 模式（推荐）\n\n```sh\ncurl -fsSL %s | bash -s -- deploy --domain example.com --demo\n```\n\n### 原生模式（无需 Docker）\n\n先安装 CLI：\n```sh\ncurl -fsSL %s | bash\n```\n再部署：\n```sh\neasygate native deploy --domain example.com --demo\n```\n\n---\n\n%s' "$BASE" "$BASE" "$EXISTING")
+          NOTES=$(printf '## 一键部署\n\n### Docker Compose 模式（推荐）\n\n```sh\ncurl -fsSL %s | bash -s -- deploy --domain example.com --demo\n```\n\n### 原生模式（无需 Docker）\n\n先安装 CLI：\n```sh\ncurl -fsSL %s | bash\n```\n再部署：\n```sh\neasygate deploy --native --domain example.com --demo\n```\n\n---\n\n%s' "$BASE" "$BASE" "$EXISTING")
           gh release edit "$TAG_NAME" --notes "$NOTES"
