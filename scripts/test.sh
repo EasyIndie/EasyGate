@@ -48,8 +48,6 @@ require_file "scripts/local-acceptance-native.sh"
 require_file "scripts/local-acceptance-native.ps1"
 require_file "scripts/behavior-test.sh"
 require_file "scripts/behavior-test.ps1"
-require_file "scripts/cleanup-native.sh"
-require_file "scripts/cleanup-native.ps1"
 require_file "scripts/lib.sh"
 require_file "scripts/easygate"
 require_file "scripts/easygate.ps1"
@@ -67,7 +65,6 @@ fi
 info "检查 Bash 脚本语法"
 bash -n scripts/test.sh
 bash -n scripts/cleanup.sh
-bash -n scripts/cleanup-native.sh
 bash -n scripts/easygate
 bash -n scripts/install.sh
 bash -n scripts/deploy.sh
@@ -82,7 +79,6 @@ if command -v shellcheck >/dev/null 2>&1; then
   if ! shellcheck \
     scripts/test.sh \
     scripts/cleanup.sh \
-    scripts/cleanup-native.sh \
     scripts/easygate \
     scripts/install.sh \
     scripts/deploy.sh \

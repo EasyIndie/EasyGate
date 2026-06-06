@@ -149,7 +149,7 @@ assert_no_native_deployment() {
     run/native-demo-api.pid \
     run/native-demo-test-api.pid; do
     if native_pid_active "${EASYGATE_HOME}/${file}"; then
-      error "检测到原生模式进程正在运行：${EASYGATE_HOME}/${file}。请先执行 ./scripts/cleanup-native.sh，再部署 Docker Compose 模式。"
+      error "检测到原生模式进程正在运行：${EASYGATE_HOME}/${file}。请先执行 easygate stop，再部署 Docker Compose 模式。"
       exit 1
     fi
   done

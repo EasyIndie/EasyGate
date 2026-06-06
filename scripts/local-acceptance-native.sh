@@ -31,7 +31,15 @@ request() {
 }
 
 cleanup() {
-  "${ROOT_DIR}/scripts/cleanup-native.sh" >/dev/null 2>&1 || true
+  # 停止原生进程并清理 PID 文件
+  local pid_file
+  for pid_file in "${EASYGATE_HOME}/run"/native-*.pid; do
+    [[ -f "$pid_file" ]] || continue
+    local pid; pid="$(cat "$pid_file" 2>/dev/null || true)"
+    [[ -n "$pid" ]] && kill "$pid" >/dev/null 2>&1 || true
+    rm -f "$pid_file"
+  done
+  pkill -f "native-demo-server" 2>/dev/null || true
   if [[ "$HAD_ENV" == true ]]; then
     cp "$ENV_BACKUP" "${ROOT_DIR}/.env"
   else

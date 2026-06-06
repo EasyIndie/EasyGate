@@ -430,46 +430,7 @@ function Test-NativeDeployBehavior {
   }
 }
 
-function Test-NativeCleanupBehavior {
-  $Fixture = Join-Path $TempRoot "native-cleanup-fixture"
-  $RuntimeDir = Join-Path $TempRoot "native-cleanup-runtime"
 
-  Write-Info "验证 PowerShell 原生清理脚本删除范围"
-  New-Fixture $Fixture
-
-  New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir "native"), (Join-Path $RuntimeDir "run"), (Join-Path $RuntimeDir "logs"), (Join-Path $RuntimeDir "cloudflared") | Out-Null
-  Set-Content -Path (Join-Path $RuntimeDir "native/traefik.yml") -Value "traefik"
-  Set-Content -Path (Join-Path $RuntimeDir "run/native-traefik.pid") -Value ""
-  Set-Content -Path (Join-Path $RuntimeDir "logs/native-traefik.log") -Value "log"
-  Set-Content -Path (Join-Path $RuntimeDir "cloudflared/config.native.yml") -Value "cloudflared"
-
-  Push-Location $Fixture
-  try {
-    $env:EASYGATE_HOME = $RuntimeDir
-    & ".\scripts\cleanup-native.ps1"
-  }
-  finally {
-    Remove-Item Env:EASYGATE_HOME -ErrorAction SilentlyContinue
-    Pop-Location
-  }
-  Assert-File (Join-Path $RuntimeDir "native/traefik.yml")
-  Assert-File (Join-Path $RuntimeDir "cloudflared/config.native.yml")
-  Assert-Missing (Join-Path $RuntimeDir "run/native-traefik.pid")
-
-  Push-Location $Fixture
-  try {
-    $env:EASYGATE_HOME = $RuntimeDir
-    & ".\scripts\cleanup-native.ps1" -Purge
-  }
-  finally {
-    Remove-Item Env:EASYGATE_HOME -ErrorAction SilentlyContinue
-    Pop-Location
-  }
-  Assert-Missing (Join-Path $RuntimeDir "native")
-  Assert-Missing (Join-Path $RuntimeDir "run")
-  Assert-Missing (Join-Path $RuntimeDir "logs")
-  Assert-Missing (Join-Path $RuntimeDir "cloudflared/config.native.yml")
-}
 
 function Test-NativeDeployBlocksCompose {
   $Fixture = Join-Path $TempRoot "native-blocks-compose-fixture"
@@ -606,8 +567,7 @@ try {
   Test-StandaloneCliBehavior
   Test-StandaloneInstallBehavior
   Test-CleanupBehavior
-  Test-NativeCleanupBehavior
-  Write-Info "PowerShell 行为测试通过"
+    Write-Info "PowerShell 行为测试通过"
 }
 finally {
   if (Test-Path $TempRoot) {

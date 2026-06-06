@@ -275,36 +275,7 @@ run_native_deploy_blocks_compose_test() {
   assert_missing "${runtime}/native/traefik.yml"
 }
 
-run_native_cleanup_behavior_test() {
-  local fixture="${TMP_DIR}/native-cleanup-fixture"
-  local runtime="${TMP_DIR}/native-cleanup-runtime"
 
-  info "验证原生清理脚本默认保留配置，purge 删除原生运行配置"
-  make_fixture "$fixture"
-
-  mkdir -p "${runtime}/native" "${runtime}/run" "${runtime}/logs" "${runtime}/cloudflared"
-  printf 'traefik\n' > "${runtime}/native/traefik.yml"
-  printf 'pid\n' > "${runtime}/run/native-traefik.pid"
-  printf 'log\n' > "${runtime}/logs/native-traefik.log"
-  printf 'cloudflared\n' > "${runtime}/cloudflared/config.native.yml"
-
-  (
-    cd "$fixture"
-    EASYGATE_HOME="$runtime" bash scripts/cleanup-native.sh
-  )
-  assert_file "${runtime}/native/traefik.yml"
-  assert_file "${runtime}/cloudflared/config.native.yml"
-  assert_missing "${runtime}/run/native-traefik.pid"
-
-  (
-    cd "$fixture"
-    EASYGATE_HOME="$runtime" bash scripts/cleanup-native.sh --purge
-  )
-  assert_missing "${runtime}/native"
-  assert_missing "${runtime}/run"
-  assert_missing "${runtime}/logs"
-  assert_missing "${runtime}/cloudflared/config.native.yml"
-}
 
 run_standalone_cli_behavior_test() {
   local runtime="${TMP_DIR}/standalone-runtime"
@@ -693,7 +664,6 @@ run_native_deploy_behavior_test
 run_native_deploy_blocks_compose_test
 run_cleanup_behavior_test
 run_cleanup_command_behavior_test
-run_native_cleanup_behavior_test
 run_standalone_cli_behavior_test
 run_install_behavior_test
 run_install_pipe_behavior_test

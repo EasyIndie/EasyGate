@@ -36,8 +36,6 @@ Write-Info "检查关键文件"
   "scripts/test.ps1",
   "scripts/cleanup.sh",
   "scripts/cleanup.ps1",
-  "scripts/cleanup-native.sh",
-  "scripts/cleanup-native.ps1",
   "scripts/deploy.sh",
   "scripts/deploy.ps1",
   "scripts/deploy-native.sh",
@@ -71,7 +69,6 @@ Write-Info "检查 PowerShell 脚本语法"
 @(
   "scripts/test.ps1",
   "scripts/cleanup.ps1",
-  "scripts/cleanup-native.ps1",
   "scripts/deploy.ps1",
   "scripts/deploy-native.ps1",
   "scripts/easygate.ps1",

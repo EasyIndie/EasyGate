@@ -175,7 +175,7 @@ function Test-NativeDeploymentActive {
 
     $Process = Get-Process -Id ([int]$PidText) -ErrorAction SilentlyContinue
     if ($Process) {
-      Fail "检测到原生模式进程正在运行：$_。请先执行 .\scripts\cleanup-native.ps1，再部署 Docker Compose 模式。"
+      Fail "检测到原生模式进程正在运行：$_。请先执行 easygate.ps1 stop，再部署 Docker Compose 模式。"
     }
   }
 }
