@@ -6,12 +6,9 @@ set -euo pipefail
 # single file to EASYGATE_HOME/bin/.  When modifying shared utilities,
 # please also update scripts/lib.sh (the canonical source).
 
-# Resolve version from git tag, environment, or fall back to "dev".
+# Resolve version from environment, git tag, or fall back to "dev".
 if [[ -z "${EASYGATE_VERSION:-}" ]]; then
-  # Release 构建时由 release.yml 嵌入版本号
-  if [[ -n "${EASYGATE_RELEASE_VERSION:-}" && "${EASYGATE_RELEASE_VERSION}" != "__RELEASE_VERSION__" ]]; then
-    VERSION="${EASYGATE_RELEASE_VERSION}"
-  elif command -v git >/dev/null 2>&1 && git -C "${0%/*}/.." rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if command -v git >/dev/null 2>&1 && git -C "${0%/*}/.." rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     VERSION="$(git -C "${0%/*}/.." describe --tags --always --dirty 2>/dev/null || echo "dev")"
   else
     VERSION="dev"
@@ -19,8 +16,6 @@ if [[ -z "${EASYGATE_VERSION:-}" ]]; then
 else
   VERSION="$EASYGATE_VERSION"
 fi
-
-EASYGATE_RELEASE_VERSION="__RELEASE_VERSION__"
 
 default_easygate_home() {
   if [[ -n "${EASYGATE_HOME:-}" ]]; then
