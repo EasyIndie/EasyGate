@@ -57,12 +57,13 @@ if ! command -v docker >/dev/null 2>&1; then
   skip_or_fail "未找到 docker"
 fi
 
-if ! docker compose version >/dev/null 2>&1; then
-  skip_or_fail "未找到 docker compose"
+# 快速检测 daemon 是否可用（docker ps 失败快，docker info 可能挂起）
+if ! docker ps >/dev/null 2>&1; then
+  skip_or_fail "Docker daemon 不可用"
 fi
 
-if ! docker info >/dev/null 2>&1; then
-  skip_or_fail "Docker daemon 不可用"
+if ! docker compose version >/dev/null 2>&1; then
+  skip_or_fail "未找到 docker compose"
 fi
 
 if [[ ! -f .env ]]; then

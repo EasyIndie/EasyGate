@@ -75,12 +75,11 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
   Skip-Or-Fail "未找到 docker"
 }
 
-# 快速检测 Docker 是否可用，避免 docker info 长时间挂起
-if ($IsWindows) {
-  $dockerSvc = Get-Service -Name "docker" -ErrorAction SilentlyContinue
-  if (-not $dockerSvc -or $dockerSvc.Status -ne "Running") {
-    Skip-Or-Fail "Docker 服务未运行"
-  }
+# 快速检测 Docker daemon 是否可用（docker ps 失败快，docker compose up 挂起慢）
+try {
+  $null = docker ps 2>&1
+} catch {
+  Skip-Or-Fail "Docker daemon 不可用"
 }
 
 try {
@@ -88,13 +87,6 @@ try {
 }
 catch {
   Skip-Or-Fail "未找到 docker compose"
-}
-
-try {
-  docker info | Out-Null
-}
-catch {
-  Skip-Or-Fail "Docker daemon 不可用"
 }
 
 if (-not (Test-Path ".env")) {
