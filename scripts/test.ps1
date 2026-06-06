@@ -162,13 +162,9 @@ if ($LibSh -notmatch "traefik_v") {
 if ($EasyGateSh -notmatch "traefik_v") {
   Fail "easygate CLI 缺少 Traefik 下载逻辑"
 }
-}
-}
-}
 if ($LocalNativePs -notmatch "EASYGATE_CLI") {
   Fail "local-acceptance-native.ps1 缺少独立 CLI 覆盖入口"
 }
-  Fail "deploy.sh 缺少原生模式互斥检查"
 }
 }
 }
