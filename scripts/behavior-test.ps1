@@ -570,11 +570,13 @@ try {
     Write-Info "PowerShell 行为测试通过"
 }
 finally {
+  try {
+    # Kill orphan mock processes that may hold file locks
+    Get-Process "traefik","cloudflared","native-demo-server" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+  } catch {
+    # Non-critical; runner cleans up after job
+  }
   if (Test-Path $TempRoot) {
-    try {
-      Remove-Item $TempRoot -Recurse -Force -ErrorAction SilentlyContinue
-    } catch {
-      Write-Host "[behavior] 临时目录清理失败：$_" -ForegroundColor Yellow
-    }
+    Remove-Item $TempRoot -Recurse -Force -ErrorAction SilentlyContinue
   }
 }
