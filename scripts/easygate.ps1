@@ -733,46 +733,6 @@ http:
   Write-Host "  https://test-api.$Domain"
 }
 
-function Cleanup-Compose {
-  param([bool]$Purge)
-  if ((Test-Path $ComposeFile) -and (Test-Path $ComposeEnv) -and (Get-Command docker -ErrorAction SilentlyContinue)) {
-    try {
-      Invoke-EasyGateCompose down --remove-orphans
-    }
-    catch {
-      Write-Warn "Docker Compose 清理失败：$($_.Exception.Message)"
-    }
-  }
-  if (-not $Purge) {
-    Write-Info "清理完成。本地配置和 tunnel 凭据已保留。"
-    return
-  }
-  Write-Warn "即将删除运行时目录 ${EasyGateHome}，包括本地配置、二进制和 tunnel 凭据。该操作不会删除 Cloudflare 上的 DNS 记录或 tunnel。"
-  $Confirm = if ([string]::IsNullOrWhiteSpace($env:EASYGATE_CONFIRM_PURGE)) {
-    Read-Host "确认继续？输入 yes"
-  } else { $env:EASYGATE_CONFIRM_PURGE }
-  if ($Confirm -ne "yes") {
-    Write-Warn "已取消彻底清理"
-    return
-  }
-  if (Test-Path $EasyGateHome) {
-    Remove-Item -Recurse -Force $EasyGateHome
-    Write-Info "已删除 ${EasyGateHome}"
-  }
-  Write-Info "彻底清理完成。Cloudflare 侧资源如需删除，请使用 cloudflared CLI 或 Cloudflare Dashboard 手动处理。"
-}
-
-function Cleanup-Native {
-  param([bool]$Purge)
-  foreach ($Name in @("native-cloudflared", "native-traefik", "native-demo-api", "native-demo-test-api")) {
-    Stop-PidFile (Join-Path $EasyGateHome "run\$Name.pid")
-  }
-  if ($Purge -and (Test-Path $EasyGateHome)) {
-    Remove-Item -Recurse -Force $EasyGateHome
-    Write-Info "已删除运行时目录：$EasyGateHome"
-  }
-}
-
 function Start-Services {
   Invoke-EasyGateCompose start
   Write-Info "服务已启动"
