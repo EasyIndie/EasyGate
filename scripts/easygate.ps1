@@ -1,4 +1,8 @@
 param(
+  # Position=0 捕获第一个位置参数（子命令如 deploy/cleanup）。
+  # 不使用 ValueFromRemainingArguments 以避免 PS7 兼容性问题。
+  [Parameter(Position=0)]
+  [string]$Command,
   [string]$Domain,
   [string]$Tunnel,
   [string]$Dashboard,
@@ -13,8 +17,7 @@ param(
   [switch]$Purge
 )
 
-# $args 捕获未绑定命名参数的位置参数（如子命令 deploy/cleanup）。
-# 不使用 ValueFromRemainingArguments 以避免 PS7 兼容性问题。
+# $args 捕获所有未绑定的参数（如子命令 native 后的 deploy）
 $CommandArgs = @($args)
 
 $ErrorActionPreference = "Stop"
@@ -791,13 +794,17 @@ function Cleanup-Native {
   }
 }
 
-if ($CommandArgs.Count -eq 0) {
-  Show-Usage
-  exit 0
+# $Command 由 Position=0 参数绑定捕获；裸调用时为空
+$Rest = if ($CommandArgs.Count -gt 0) { @($CommandArgs) } else { @() }
+if ([string]::IsNullOrWhiteSpace($Command)) {
+  if ($CommandArgs.Count -gt 0) {
+    $Command = $CommandArgs[0]
+    $Rest = if ($CommandArgs.Count -gt 1) { $CommandArgs[1..($CommandArgs.Count - 1)] } else { @() }
+  } else {
+    Show-Usage
+    exit 0
+  }
 }
-
-$Command = $CommandArgs[0]
-$Rest = if ($CommandArgs.Count -gt 1) { $CommandArgs[1..($CommandArgs.Count - 1)] } else { @() }
 
 switch ($Command) {
   "deploy" { Deploy-Compose $Rest }
