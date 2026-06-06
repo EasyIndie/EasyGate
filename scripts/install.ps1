@@ -1,4 +1,3 @@
-param()
 $CommandArgs = @($args)
 
 $ErrorActionPreference = "Stop"

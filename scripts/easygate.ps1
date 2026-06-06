@@ -1,5 +1,4 @@
-param()
-# 不使用参数绑定以避免 PS7 兼容性问题。
+# 不使用 param() 以避免 PS7 参数绑定问题。
 # $args 捕获所有原始参数，由函数内部手动解析。
 $CommandArgs = @($args)
 $Command = ""
