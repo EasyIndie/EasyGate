@@ -689,6 +689,7 @@ EOF_ENV
   cat > "${EASYGATE_HOME}/cloudflared/config.yml" <<EOF_CONFIG
 tunnel: ${tunnel_name}
 credentials-file: /etc/cloudflared/${tunnel_name}.json
+ha-connections: 2
 
 ingress:
   - hostname: "*.${base_domain}"
@@ -1010,6 +1011,7 @@ EOF_DEMO
     cat > "${EASYGATE_HOME}/cloudflared/config.native.yml" <<EOF_CLOUDFLARED
 tunnel: ${tunnel_name}
 credentials-file: ${EASYGATE_HOME}/cloudflared/${tunnel_name}.json
+ha-connections: 2
 
 ingress:
   - hostname: "*.${base_domain}"
@@ -1279,6 +1281,41 @@ show_status() {
     compose) compose ps "$@" ;;
     native)
       info "原生模式进程状态："
+      # 优先查询系统服务管理器
+      case "$(uname -s)" in
+        Darwin)
+          if command -v launchctl >/dev/null 2>&1; then
+            for svc in native-traefik native-cloudflared; do
+              local label="com.easygate.${svc}"
+              local pid
+              pid="$(launchctl list 2>/dev/null | awk -v l="$label" '$3==l {print $1}')" || true
+              local name="${svc#native-}"
+              if [[ -n "$pid" && "$pid" != "-" ]]; then
+                printf '  %-15s running  (pid %s)\n' "$name" "$pid"
+              else
+                printf '  %-15s stopped\n' "$name"
+              fi
+            done
+            return
+          fi
+          ;;
+        Linux)
+          if command -v systemctl >/dev/null 2>&1; then
+            for svc in easygate-traefik easygate-cloudflared; do
+              local active
+              active="$(systemctl --user is-active "${svc}.service" 2>/dev/null)" || true
+              local name="${svc#easygate-}"
+              if [[ "$active" == "active" ]]; then
+                printf '  %-15s running\n' "$name"
+              else
+                printf '  %-15s stopped\n' "$name"
+              fi
+            done
+            return
+          fi
+          ;;
+      esac
+      # 无系统服务时 fallback 到 PID 文件
       for pid_file in \
         "${EASYGATE_HOME}/run/native-traefik.pid" \
         "${EASYGATE_HOME}/run/native-cloudflared.pid" \

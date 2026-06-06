@@ -182,6 +182,7 @@ if [[ "$LOCAL_ONLY" != true ]]; then
   cat > "${EASYGATE_HOME}/cloudflared/config.native.yml" <<EOF_CLOUDFLARED
 tunnel: ${TUNNEL_NAME}
 credentials-file: ${EASYGATE_HOME}/cloudflared/${TUNNEL_NAME}.json
+ha-connections: 2
 
 ingress:
   - hostname: "*.${BASE_DOMAIN}"
