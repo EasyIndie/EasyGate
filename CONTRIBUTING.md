@@ -48,16 +48,13 @@ scripts/
   lib.sh              ← Shared shell utilities
   easygate            ← Standalone CLI (self-contained)
   easygate.ps1        ← Windows PowerShell CLI
-  deploy.sh/.ps1      ← Docker Compose deployment
-  deploy-native.sh/.ps1 ← Native (non-Docker) deployment
   cleanup.sh/.ps1     ← Docker Compose cleanup
-  cleanup-native.sh/.ps1 ← Native cleanup
   install.sh/.ps1     ← One-liner installer
   test.sh/.ps1        ← Static checks
   behavior-test.sh/.ps1 ← Mock-based behaviour tests
   local-acceptance.sh/.ps1 ← Docker routing tests
   local-acceptance-native.sh/.ps1 ← Native routing tests
-  service-helper.py   ← Service YAML helper
+  service-helper.py   ← Service YAML helper (embedded in CLI)
 docs/                 ← Detailed documentation
 .github/workflows/    ← CI and Release pipelines
 ```
