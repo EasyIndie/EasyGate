@@ -571,7 +571,15 @@ function Stop-PidFile {
   if (-not [string]::IsNullOrWhiteSpace($PidText)) {
     $Process = Get-Process -Id ([int]$PidText) -ErrorAction SilentlyContinue
     if ($Process) {
-      Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+      # Graceful stop first, wait up to 4 seconds
+      Stop-Process -Id $Process.Id -ErrorAction SilentlyContinue
+      $Process.WaitForExit(4000) | Out-Null
+      # Force kill if still running (SIGKILL equivalent)
+      $Stubborn = Get-Process -Id ([int]$PidText) -ErrorAction SilentlyContinue
+      if ($Stubborn) {
+        Stop-Process -Id $Stubborn.Id -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 500
+      }
     }
   }
   Remove-Item -Force $Path -ErrorAction SilentlyContinue
@@ -947,9 +955,23 @@ function Invoke-Uninstall {
     try { Invoke-EasyGateCompose --profile demo down --remove-orphans } catch { }
   }
   # Delete all local data
+  # On Windows, processes may still hold file handles briefly after Stop-Process.
+  # Retry a few times to avoid "Access denied" on locked executables.
   if (Test-Path $EasyGateHome) {
-    Remove-Item -Recurse -Force $EasyGateHome
-    Write-Info "已删除运行时目录 ${EasyGateHome}"
+    $Removed = $false
+    for ($Retry = 0; $Retry -lt 5; $Retry++) {
+      try {
+        Remove-Item -Recurse -Force $EasyGateHome -ErrorAction Stop
+        Write-Info "已删除运行时目录 ${EasyGateHome}"
+        $Removed = $true
+        break
+      } catch {
+        Start-Sleep -Milliseconds 500
+      }
+    }
+    if (-not $Removed) {
+      Write-Warn "无法完全删除运行时目录（文件可能被占用）：${EasyGateHome}"
+    }
   }
   Write-Info "卸载完成。Cloudflare 侧资源如需删除，请使用 cloudflared CLI 或 Cloudflare Dashboard 手动处理。"
 }
