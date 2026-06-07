@@ -220,13 +220,16 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Info "检查 Docker Compose 配置"
 if (Get-Command docker -ErrorAction SilentlyContinue) {
+  $oldEAP = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
   try {
-    docker compose version | Out-Null
-    docker compose --env-file .env.example config | Out-Null
+    docker compose version 2>$null | Out-Null
+    docker compose --env-file .env.example config 2>$null | Out-Null
   }
   catch {
     Write-Host "[test] Docker Compose 不可用，跳过 Compose 配置检查" -ForegroundColor Yellow
   }
+  $ErrorActionPreference = $oldEAP
 }
 else {
   Write-Host "[test] 未找到 docker，跳过 Compose 配置检查" -ForegroundColor Yellow
