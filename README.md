@@ -1,6 +1,8 @@
 # EasyGate
 
 [![CI](https://github.com/EasyIndie/EasyGate/actions/workflows/ci.yml/badge.svg)](https://github.com/EasyIndie/EasyGate/actions/workflows/ci.yml)
+[![Release](https://github.com/EasyIndie/EasyGate/actions/workflows/release.yml/badge.svg)](https://github.com/EasyIndie/EasyGate/actions/workflows/release.yml)
+
 
 面向家庭 NAT、家庭实验室和一人公司的轻量入口网关——用 Cloudflare Free + Cloudflare Tunnel 把本地服务暴露到公网，**不需要公网 IP，不需要开放路由器端口**。
 
