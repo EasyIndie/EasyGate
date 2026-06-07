@@ -236,5 +236,6 @@ else {
 }
 
 Write-Info "全部检查通过"
+exit 0
 
 
