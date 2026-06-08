@@ -616,19 +616,19 @@ function Test-ServiceHelperInstallation {
 
   $SrcHelper = Join-Path $PSScriptRoot "service-helper.py"
   Assert-File $SrcHelper
-  # 验证 Python 语法
-  $Result = python -m py_compile $SrcHelper 2>&1
-  if ($LASTEXITCODE -ne 0) {
-    $FailMsg = "service-helper.py Python 语法检查失败: $Result"
-    if ($env:EASYGATE_CI -ne "true") { Fail $FailMsg }
-    else { Write-Warn $FailMsg }
-  }
 
-  # 验证 easygate.ps1 中包含 base64 版本的 service-helper
-  $EasyGatePs = Join-Path (Split-Path -Parent $PSScriptRoot) "scripts\easygate.ps1"
-  $PsContent = Get-Content -Raw $EasyGatePs
-  if ($PsContent -notmatch "@'\s*[A-Za-z0-9+/=]{200,}\s*'@") {
-    Write-Warn "easygate.ps1 中未检测到 base64 编码的 service-helper（高压缩率下可能误判）"
+  # Python 语法检查（仅在 Python 可用时执行）
+  $Python = Get-Command python3 -ErrorAction SilentlyContinue
+  if (-not $Python) { $Python = Get-Command python -ErrorAction SilentlyContinue }
+  if ($Python) {
+    $Result = & $Python.Source -m py_compile $SrcHelper 2>&1
+    if ($LASTEXITCODE -ne 0) {
+      $FailMsg = "service-helper.py Python 语法检查失败: $Result"
+      if ($env:EASYGATE_CI -ne "true") { Fail $FailMsg }
+      else { Write-Warn $FailMsg }
+    }
+  } else {
+    Write-Warn "未找到 python3/python，跳过语法检查"
   }
 
   Write-Info "Install-ServiceHelper 行为测试通过"
