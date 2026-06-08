@@ -757,13 +757,17 @@ function Test-ModeDetectionBehavior {
     $FullScript = @"
 `$ErrorActionPreference = "Stop"
 `$env:EASYGATE_HOME = "$RuntimeDir"
+# 清理之前测试的标记文件，确保每个场景独立
+Remove-Item (Join-Path `$env:EASYGATE_HOME '.mode') -Force -ErrorAction SilentlyContinue
+Remove-Item (Join-Path `$env:EASYGATE_HOME 'run\native-traefik.pid') -Force -ErrorAction SilentlyContinue
+Remove-Item (Join-Path `$env:EASYGATE_HOME 'compose') -Recurse -Force -ErrorAction SilentlyContinue
 $PrepareScript
 . "$EasyGatePath"
 Write-Output (Detect-Mode)
 "@
     $FullScript | Set-Content $Helper -Encoding UTF8
     $Output = & pwsh -NoProfile -File $Helper 2>&1
-    $Detected = ($Output | Where-Object { $_ -notmatch '^\[DEBUG\]' } | ForEach-Object { $_.Trim() }) -join ""
+    $Detected = ($Output | ForEach-Object { "$_" } | Where-Object { $_ -notmatch '^\[DEBUG\]' } | ForEach-Object { $_.Trim() }) -join ""
     if ($Detected -ne $Expected) {
       Fail "${Desc}: 期望 '${Expected}'，实际 '${Detected}'"
     }
