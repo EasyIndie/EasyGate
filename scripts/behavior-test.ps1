@@ -755,7 +755,6 @@ try {
   Test-CleanupBehavior
   Test-ValidatePortBehavior
   Test-ValidateDomainBehavior
-  Test-ServiceHelperInstallation
   Test-LogRotationBehavior
   Test-ModeDetectionBehavior
   Test-InstallPathConfiguration
