@@ -753,6 +753,11 @@ try {
   Test-StandaloneCliBehavior
   Test-StandaloneInstallBehavior
   Test-CleanupBehavior
+  Test-ValidatePortBehavior
+  Test-ValidateDomainBehavior
+  Test-LogRotationBehavior
+  Test-ModeDetectionBehavior
+  Test-InstallPathConfiguration
   Write-Info "PowerShell 行为测试通过"
 }
 finally {
