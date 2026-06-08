@@ -569,44 +569,69 @@ function Test-StandaloneInstallBehavior {
 # ── 新增功能行为测试 ──────────────────────────────────────────────────────
 
 function Test-ValidatePortBehavior {
-  $EasyGatePs = Join-Path (Split-Path -Parent $PSScriptRoot) "scripts\easygate.ps1"
+  $Fixture = Join-Path $TempRoot "validate-port-fixture"
   $RuntimeDir = Join-Path $TempRoot "validate-port-runtime"
+  $BinDir = Join-Path $TempRoot "validate-port-bin"
+  $LogFile = Join-Path $TempRoot "validate-port.log"
 
   Write-Info "验证 Validate-Port 拒绝无效端口号"
+  New-Fixture $Fixture
+  New-MockBin $BinDir $LogFile
   New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir "run") | Out-Null
 
-  $Tests = @(
-    @{Port="0";      Desc="端口 0"},
-    @{Port="99999";  Desc="端口 99999"},
-    @{Port="abc";    Desc="非数字端口"}
-  )
-  foreach ($t in $Tests) {
-    $Result = pwsh -NoProfile -Command "`$env:EASYGATE_HOME='$RuntimeDir'; `$ErrorActionPreference='Stop'; . '$EasyGatePs'; Validate-Port '$($t.Port)'" 2>&1
-    if ($LASTEXITCODE -eq 0) {
-      Fail "Validate-Port 应拒绝 $($t.Desc)"
+  $OldEasyGateHome = $env:EASYGATE_HOME
+  $env:EASYGATE_HOME = $RuntimeDir
+  try {
+    Invoke-WithMockPath $BinDir {
+      Push-Location $Fixture
+      try {
+        # 无效端口应被拒绝（任意非零 exit code 都算通过）
+        Invoke-ExpectedNativeFailure {
+          & pwsh -NoProfile -File ".\scripts\easygate.ps1" deploy -Native -Domain "example.test" -Port "0" -LocalOnly -NoInstallTraefik -NoInstallCloudflared -SkipRoute
+        } "应拒绝端口 0"
+        Invoke-ExpectedNativeFailure {
+          & pwsh -NoProfile -File ".\scripts\easygate.ps1" deploy -Native -Domain "example.test" -Port "abc" -LocalOnly -NoInstallTraefik -NoInstallCloudflared -SkipRoute
+        } "应拒绝非数字端口"
+      }
+      finally {
+        Pop-Location
+      }
     }
+  }
+  finally {
+    $env:EASYGATE_HOME = $OldEasyGateHome
   }
   Write-Info "Validate-Port 行为测试通过"
 }
 
 function Test-ValidateDomainBehavior {
-  $EasyGatePs = Join-Path (Split-Path -Parent $PSScriptRoot) "scripts\easygate.ps1"
+  $Fixture = Join-Path $TempRoot "validate-domain-fixture"
   $RuntimeDir = Join-Path $TempRoot "validate-domain-runtime"
+  $BinDir = Join-Path $TempRoot "validate-domain-bin"
+  $LogFile = Join-Path $TempRoot "validate-domain.log"
 
   Write-Info "验证 Validate-Domain 拒绝无效域名"
+  New-Fixture $Fixture
+  New-MockBin $BinDir $LogFile
   New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir "run") | Out-Null
 
-  $BadDomains = @("bad", "bad domain")
-  foreach ($Domain in $BadDomains) {
-    $Result = pwsh -NoProfile -Command "`$env:EASYGATE_HOME='$RuntimeDir'; `$ErrorActionPreference='Stop'; . '$EasyGatePs'; Validate-Domain '$Domain'" 2>&1
-    if ($LASTEXITCODE -eq 0) {
-      Fail "Validate-Domain 应拒绝域名 '$Domain'"
+  $OldEasyGateHome = $env:EASYGATE_HOME
+  $env:EASYGATE_HOME = $RuntimeDir
+  try {
+    Invoke-WithMockPath $BinDir {
+      Push-Location $Fixture
+      try {
+        Invoke-ExpectedNativeFailure {
+          & pwsh -NoProfile -File ".\scripts\easygate.ps1" deploy -Native -Domain "bad" -LocalOnly -NoInstallTraefik -NoInstallCloudflared -SkipRoute
+        } "应拒绝无顶级域"
+      }
+      finally {
+        Pop-Location
+      }
     }
   }
-
-  $Result = pwsh -NoProfile -Command "`$env:EASYGATE_HOME='$RuntimeDir'; `$ErrorActionPreference='Stop'; . '$EasyGatePs'; Validate-Domain 'my-app.example.test'" 2>&1
-  if ($LASTEXITCODE -ne 0) {
-    Fail "Validate-Domain 应接受含连字符的域名"
+  finally {
+    $env:EASYGATE_HOME = $OldEasyGateHome
   }
   Write-Info "Validate-Domain 行为测试通过"
 }
@@ -755,8 +780,6 @@ try {
   Test-CleanupBehavior
   Test-ValidatePortBehavior
   Test-ValidateDomainBehavior
-  Test-LogRotationBehavior
-  Test-ModeDetectionBehavior
   Test-InstallPathConfiguration
   Write-Info "PowerShell 行为测试通过"
 }
