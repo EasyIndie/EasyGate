@@ -817,9 +817,10 @@ try {
 }
 "@ | Set-Content $Helper -Encoding UTF8
 
-  & pwsh -NoProfile -File $Helper | Out-Null
+  $InstallOutput = & pwsh -NoProfile -File $Helper 2>&1
   if ($LASTEXITCODE -ne 0) {
-    Fail "install.ps1 PATH 配置测试失败"
+    $ErrorLines = ($InstallOutput | ForEach-Object { "$_" } | Select-Object -Last 10) -join "`n"
+    Fail "install.ps1 PATH 配置测试失败。子进程输出：`n$ErrorLines"
   }
   Write-Info "install.ps1 PATH 配置测试通过"
 }
