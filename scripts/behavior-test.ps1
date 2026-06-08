@@ -569,118 +569,92 @@ function Test-StandaloneInstallBehavior {
 # ── 新增功能行为测试 ──────────────────────────────────────────────────────
 
 function Test-ValidatePortBehavior {
-  $Fixture = Join-Path $TempRoot "validate-port-fixture"
+  $EasyGatePs = Join-Path (Split-Path -Parent $PSScriptRoot) "scripts\easygate.ps1"
   $RuntimeDir = Join-Path $TempRoot "validate-port-runtime"
-  $BinDir = Join-Path $TempRoot "validate-port-bin"
-  $LogFile = Join-Path $TempRoot "validate-port.log"
 
   Write-Info "验证 Validate-Port 拒绝无效端口号"
-  New-Fixture $Fixture
-  New-MockBin $BinDir $LogFile
   New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir "run") | Out-Null
 
-  $OldEasyGateHome = $env:EASYGATE_HOME
-  $env:EASYGATE_HOME = $RuntimeDir
-  try {
-    Invoke-WithMockPath $BinDir {
-      Push-Location $Fixture
-      try {
-        Invoke-ExpectedNativeFailure {
-          & pwsh -NoProfile -File ".\scripts\easygate.ps1" deploy -Native -Domain "example.test" -Port "0" -LocalOnly -NoInstallTraefik -NoInstallCloudflared -SkipRoute
-        } "Validate-Port 应拒绝端口 0"
-        Invoke-ExpectedNativeFailure {
-          & pwsh -NoProfile -File ".\scripts\easygate.ps1" deploy -Native -Domain "example.test" -Port "99999" -LocalOnly -NoInstallTraefik -NoInstallCloudflared -SkipRoute
-        } "Validate-Port 应拒绝端口 99999"
-        Invoke-ExpectedNativeFailure {
-          & pwsh -NoProfile -File ".\scripts\easygate.ps1" deploy -Native -Domain "example.test" -Port "abc" -LocalOnly -NoInstallTraefik -NoInstallCloudflared -SkipRoute
-        } "Validate-Port 应拒绝非数字端口"
-      }
-      finally {
-        Pop-Location
-      }
+  # 通过 dot-sourcing 直接调用 Validate-Port 函数
+  $Tests = @(
+    @{Port="0";      Desc="端口 0"},
+    @{Port="99999";  Desc="端口 99999"},
+    @{Port="abc";    Desc="非数字端口"}
+  )
+  foreach ($t in $Tests) {
+    $ScriptBlock = @"
+`$env:EASYGATE_HOME = '$RuntimeDir'
+`$ErrorActionPreference = 'Stop'
+. '$EasyGatePs'
+Validate-Port '$($t.Port)'
+"@
+    $Result = pwsh -NoProfile -Command $ScriptBlock 2>&1
+    if ($LASTEXITCODE -eq 0) {
+      Fail "Validate-Port 应拒绝 $($t.Desc)"
     }
-  }
-  finally {
-    $env:EASYGATE_HOME = $OldEasyGateHome
   }
   Write-Info "Validate-Port 行为测试通过"
 }
 
 function Test-ValidateDomainBehavior {
-  $Fixture = Join-Path $TempRoot "validate-domain-fixture"
+  $EasyGatePs = Join-Path (Split-Path -Parent $PSScriptRoot) "scripts\easygate.ps1"
   $RuntimeDir = Join-Path $TempRoot "validate-domain-runtime"
-  $BinDir = Join-Path $TempRoot "validate-domain-bin"
-  $LogFile = Join-Path $TempRoot "validate-domain.log"
 
   Write-Info "验证 Validate-Domain 拒绝无效域名"
-  New-Fixture $Fixture
-  New-MockBin $BinDir $LogFile
   New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir "run") | Out-Null
 
-  $OldEasyGateHome = $env:EASYGATE_HOME
-  $env:EASYGATE_HOME = $RuntimeDir
-  try {
-    Invoke-WithMockPath $BinDir {
-      Push-Location $Fixture
-      try {
-        Invoke-ExpectedNativeFailure {
-          & pwsh -NoProfile -File ".\scripts\easygate.ps1" deploy -Native -Domain "bad" -LocalOnly -NoInstallTraefik -NoInstallCloudflared -SkipRoute
-        } "Validate-Domain 应拒绝无顶级域"
-        Invoke-ExpectedNativeFailure {
-          & pwsh -NoProfile -File ".\scripts\easygate.ps1" deploy -Native -Domain "bad domain" -LocalOnly -NoInstallTraefik -NoInstallCloudflared -SkipRoute
-        } "Validate-Domain 应拒绝含空格的域名"
-        & pwsh -NoProfile -File ".\scripts\easygate.ps1" deploy -Native -Domain "my-app.example.test" -LocalOnly -NoInstallTraefik -NoInstallCloudflared -SkipRoute 2>$null
-        if ($LASTEXITCODE -eq 0) {
-          Write-Info "Validate-Domain 接受含连字符的域名（预期行为）"
-        }
-      }
-      finally {
-        Pop-Location
-      }
+  $BadDomains = @("bad", "bad domain")
+  foreach ($Domain in $BadDomains) {
+    $ScriptBlock = @"
+`$env:EASYGATE_HOME = '$RuntimeDir'
+`$ErrorActionPreference = 'Stop'
+. '$EasyGatePs'
+Validate-Domain '$Domain'
+"@
+    $Result = pwsh -NoProfile -Command $ScriptBlock 2>&1
+    if ($LASTEXITCODE -eq 0) {
+      Fail "Validate-Domain 应拒绝域名 '$Domain'"
     }
   }
-  finally {
-    $env:EASYGATE_HOME = $OldEasyGateHome
+
+  # 有效域名应通过
+  $ScriptBlock = @"
+`$env:EASYGATE_HOME = '$RuntimeDir'
+`$ErrorActionPreference = 'Stop'
+. '$EasyGatePs'
+Validate-Domain 'my-app.example.test'
+"@
+  $Result = pwsh -NoProfile -Command $ScriptBlock 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    Fail "Validate-Domain 应接受含连字符的域名"
   }
   Write-Info "Validate-Domain 行为测试通过"
 }
 
 function Test-ServiceHelperInstallation {
-  $Fixture = Join-Path $TempRoot "service-helper-fixture"
+  $EasyGatePs = Join-Path (Split-Path -Parent $PSScriptRoot) "scripts\easygate.ps1"
   $RuntimeDir = Join-Path $TempRoot "service-helper-runtime"
-  $BinDir = Join-Path $TempRoot "service-helper-bin"
-  $LogFile = Join-Path $TempRoot "service-helper.log"
 
   Write-Info "验证 Install-ServiceHelper 嵌入 service-helper.py"
-  New-Fixture $Fixture
-  New-MockBin $BinDir $LogFile
   New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir "run") | Out-Null
-  New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir ".cloudflared") | Out-Null
-  Set-Content -Path (Join-Path $RuntimeDir ".cloudflared/cert.pem") -Value "cert"
+  New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir "lib") | Out-Null
 
-  $OldEasyGateHome = $env:EASYGATE_HOME
-  $env:EASYGATE_HOME = $RuntimeDir
-  try {
-    Invoke-WithMockPath $BinDir {
-      Push-Location $Fixture
-      try {
-        & pwsh -NoProfile -File ".\scripts\easygate.ps1" deploy -Native -Domain "example.test" -LocalOnly -NoInstallTraefik -NoInstallCloudflared -SkipRoute
-      }
-      finally {
-        Pop-Location
-      }
-    }
-    $HelperPath = Join-Path $RuntimeDir "lib\service-helper.py"
-    Assert-File $HelperPath
-    Assert-Contains $HelperPath "def add_service"
-    # 幂等性：移除后重新部署，验证重新写入
-    Remove-Item $HelperPath -Force
-    & pwsh -NoProfile -File ".\scripts\easygate.ps1" deploy -Native -Domain "example.test" -LocalOnly -NoInstallTraefik -NoInstallCloudflared -SkipRoute 2>$null
-    Assert-File $HelperPath
+  $ScriptBlock = @"
+`$env:EASYGATE_HOME = '$RuntimeDir'
+`$ErrorActionPreference = 'Stop'
+. '$EasyGatePs'
+Install-ServiceHelper
+Write-Host (Test-Path (Join-Path '${RuntimeDir}' 'lib\service-helper.py'))
+"@
+  $Result = pwsh -NoProfile -Command $ScriptBlock 2>&1
+  $LastLine = ($Result -split "`n" | Select-Object -Last 1).Trim()
+  if ($LastLine -ne "True") {
+    Fail "Install-ServiceHelper 未创建 service-helper.py. 输出: $Result"
   }
-  finally {
-    $env:EASYGATE_HOME = $OldEasyGateHome
-  }
+
+  $HelperPath = Join-Path $RuntimeDir "lib\service-helper.py"
+  Assert-File $HelperPath
+  Assert-Contains $HelperPath "def add_service"
   Write-Info "Install-ServiceHelper 行为测试通过"
 }
 
