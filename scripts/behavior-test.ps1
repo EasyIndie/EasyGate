@@ -741,53 +741,49 @@ function Test-ModeDetectionBehavior {
   $RuntimeDir = Join-Path $TempRoot "mode-detection-runtime"
   $EasyGatePath = Join-Path $RootDir "scripts\easygate.ps1"
   $Helper = Join-Path $TempRoot "test-mode-detection.ps1"
-  $ComposeDir = Join-Path $RuntimeDir "compose"
-  $RunDir = Join-Path $RuntimeDir "run"
 
-  New-Item -ItemType Directory -Force -Path $RunDir | Out-Null
+  New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir "run") | Out-Null
 
-  # Test each scenario: prepare files, run Detect-Mode, check result
-  function Invoke-DetectTest {
+  # 与 Validate-Port 等测试相同的模式：生成辅助脚本，dot-source easygate.ps1，调用目标函数。
+  # 每次测试使用独立的脚本内容，避免变量捕获问题。
+  function Run-DetectTest {
     param(
-      [string]$PrepareScript,
+      [string]$SetupLine,
       [string]$Expected,
       [string]$Desc
     )
-    # Write a helper that sets up state, dot-sources easygate, and outputs Detect-Mode result
-    $FullScript = @"
-`$ErrorActionPreference = "Stop"
-`$env:EASYGATE_HOME = "$RuntimeDir"
-# 清理之前测试的标记文件，确保每个场景独立
-Remove-Item (Join-Path `$env:EASYGATE_HOME '.mode') -Force -ErrorAction SilentlyContinue
-Remove-Item (Join-Path `$env:EASYGATE_HOME 'run\native-traefik.pid') -Force -ErrorAction SilentlyContinue
-Remove-Item (Join-Path `$env:EASYGATE_HOME 'compose') -Recurse -Force -ErrorAction SilentlyContinue
-$PrepareScript
-. "$EasyGatePath"
-Write-Output (Detect-Mode)
-"@
-    $FullScript | Set-Content $Helper -Encoding UTF8
+    # 直接拼接脚本内容，扩展 $EasyGatePath 和 $RuntimeDir
+    $Script = @(
+      '$ErrorActionPreference = "Stop"'
+      "`$env:EASYGATE_HOME = '$RuntimeDir'"
+      '# 清理之前测试的标记文件'
+      "Remove-Item (Join-Path `$env:EASYGATE_HOME '.mode') -Force -ErrorAction SilentlyContinue"
+      "Remove-Item (Join-Path `$env:EASYGATE_HOME 'run\native-traefik.pid') -Force -ErrorAction SilentlyContinue"
+      "Remove-Item (Join-Path `$env:EASYGATE_HOME 'compose') -Recurse -Force -ErrorAction SilentlyContinue"
+      $SetupLine
+      ". '$EasyGatePath'"
+      '$Result = Detect-Mode'
+      'Write-Host $Result'
+    ) -join "`r`n"
+    $Script | Set-Content $Helper -Encoding UTF8
+
     $Output = & pwsh -NoProfile -File $Helper 2>&1
-    $Detected = ($Output | ForEach-Object { "$_" } | Where-Object { $_ -notmatch '^\[DEBUG\]' } | ForEach-Object { $_.Trim() }) -join ""
+    $Detected = ($Output | ForEach-Object { "$_" } | Where-Object { $_ -notmatch '^\[DEBUG\]' -and $_ -notmatch '\[easygate\]' } | ForEach-Object { $_.Trim() }) -join ""
     if ($Detected -ne $Expected) {
       Fail "${Desc}: 期望 '${Expected}'，实际 '${Detected}'"
     }
   }
 
   # .mode file: native
-  Invoke-DetectTest "Set-Content -Path (Join-Path `$env:EASYGATE_HOME '.mode') -Value 'native' -NoNewline" "native" ".mode='native'"
+  Run-DetectTest "Set-Content -Path (Join-Path `$env:EASYGATE_HOME '.mode') -Value 'native' -NoNewline" "native" ".mode='native'"
   # .mode file: compose
-  Invoke-DetectTest "Set-Content -Path (Join-Path `$env:EASYGATE_HOME '.mode') -Value 'compose' -NoNewline" "compose" ".mode='compose'"
-  # PID file fallback
-  Invoke-DetectTest "'' | Set-Content (Join-Path `$env:EASYGATE_HOME 'run\native-traefik.pid')" "native" "native PID file"
-  # Compose files fallback (creates compose dir + files from within the helper)
-  $ComposeSetup = @"
-New-Item -Type Directory -Force (Join-Path `$env:EASYGATE_HOME 'compose') | Out-Null
-'{}' | Set-Content (Join-Path `$env:EASYGATE_HOME 'compose\docker-compose.yml')
-'BASE_DOMAIN=test' | Set-Content (Join-Path `$env:EASYGATE_HOME 'compose\.env')
-"@
-  Invoke-DetectTest $ComposeSetup "compose" "compose files"
+  Run-DetectTest "Set-Content -Path (Join-Path `$env:EASYGATE_HOME '.mode') -Value 'compose' -NoNewline" "compose" ".mode='compose'"
+  # PID file fallback (need run dir to exist)
+  Run-DetectTest "Set-Content -Path (Join-Path `$env:EASYGATE_HOME 'run\native-traefik.pid') -Value '12345'" "native" "native PID file"
+  # Compose files fallback
+  Run-DetectTest "New-Item -Type Directory -Force (Join-Path `$env:EASYGATE_HOME 'compose') | Out-Null; '{}' | Set-Content (Join-Path `$env:EASYGATE_HOME 'compose\docker-compose.yml'); 'BASE_DOMAIN=test' | Set-Content (Join-Path `$env:EASYGATE_HOME 'compose\.env')" "compose" "compose files"
   # No markers
-  Invoke-DetectTest "" "" "no markers"
+  Run-DetectTest "" "" "no markers"
 
   Write-Info "Detect-Mode 行为测试通过"
 }
