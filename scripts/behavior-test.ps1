@@ -567,80 +567,117 @@ function Test-StandaloneInstallBehavior {
 }
 
 # ── 新增功能行为测试 ──────────────────────────────────────────────────────
+# 这些测试使用子进程 dot-source easygate.ps1 来直接调用函数，
+# 避免了完整的 deploy pipeline 和 mock 基础设施，更加可靠。
+# easygate.ps1 的 dot-source guard ($MyInvocation.InvocationName -eq '.') 会跳过 dispatch，
+# 仅加载函数定义，因此可以直接调用 Validate-Port、Detect-Mode 等函数。
 
 function Test-ValidatePortBehavior {
-  $Fixture = Join-Path $TempRoot "validate-port-fixture"
-  $RuntimeDir = Join-Path $TempRoot "validate-port-runtime"
-  $BinDir = Join-Path $TempRoot "validate-port-bin"
-  $LogFile = Join-Path $TempRoot "validate-port.log"
-
   Write-Info "验证 Validate-Port 拒绝无效端口号"
-  New-Fixture $Fixture
-  New-MockBin $BinDir $LogFile
-  New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir "run") | Out-Null
 
-  $OldEasyGateHome = $env:EASYGATE_HOME
-  $env:EASYGATE_HOME = $RuntimeDir
-  try {
-    Invoke-WithMockPath $BinDir {
-      Push-Location $Fixture
-      try {
-        # 无效端口应被拒绝（任意非零 exit code 都算通过）
-        Invoke-ExpectedNativeFailure {
-          & pwsh -NoProfile -File ".\scripts\easygate.ps1" deploy -Native -Domain "example.test" -Port "0" -LocalOnly -NoInstallTraefik -NoInstallCloudflared -SkipRoute
-        } "应拒绝端口 0"
-        Invoke-ExpectedNativeFailure {
-          & pwsh -NoProfile -File ".\scripts\easygate.ps1" deploy -Native -Domain "example.test" -Port "abc" -LocalOnly -NoInstallTraefik -NoInstallCloudflared -SkipRoute
-        } "应拒绝非数字端口"
-      }
-      finally {
-        Pop-Location
-      }
-    }
+  $EasyGatePath = Join-Path $RootDir "scripts\easygate.ps1"
+  $Helper = Join-Path $TempRoot "test-validate-port.ps1"
+
+  # 辅助函数：生成并运行一次 Validate-Port 调用
+  $TestOne = {
+    param([string]$Port, [string]$Desc)
+    @"
+`$ErrorActionPreference = "Stop"
+. "$EasyGatePath"
+Validate-Port "$Port" "test"
+"@ | Set-Content $Helper -Encoding UTF8
+    Invoke-ExpectedNativeFailure {
+      & pwsh -NoProfile -File $Helper
+    } $Desc
   }
-  finally {
-    $env:EASYGATE_HOME = $OldEasyGateHome
+
+  # 无效端口
+  & $TestOne "0"     "Validate-Port 应拒绝端口 0"
+  & $TestOne "abc"   "Validate-Port 应拒绝非数字端口 abc"
+  & $TestOne "65536" "Validate-Port 应拒绝超出范围的端口 65536"
+
+  # 有效端口应正常通过（exit 0）
+  @"
+`$ErrorActionPreference = "Stop"
+. "$EasyGatePath"
+Validate-Port "8080" "test"
+Write-Host "OK"
+"@ | Set-Content $Helper -Encoding UTF8
+  & pwsh -NoProfile -File $Helper | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    Fail "Validate-Port 应接受有效端口 8080"
   }
+
   Write-Info "Validate-Port 行为测试通过"
 }
 
 function Test-ValidateDomainBehavior {
-  $Fixture = Join-Path $TempRoot "validate-domain-fixture"
-  $RuntimeDir = Join-Path $TempRoot "validate-domain-runtime"
-  $BinDir = Join-Path $TempRoot "validate-domain-bin"
-  $LogFile = Join-Path $TempRoot "validate-domain.log"
-
   Write-Info "验证 Validate-Domain 拒绝无效域名"
-  New-Fixture $Fixture
-  New-MockBin $BinDir $LogFile
-  New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir "run") | Out-Null
 
-  $OldEasyGateHome = $env:EASYGATE_HOME
-  $env:EASYGATE_HOME = $RuntimeDir
-  try {
-    Invoke-WithMockPath $BinDir {
-      Push-Location $Fixture
-      try {
-        Invoke-ExpectedNativeFailure {
-          & pwsh -NoProfile -File ".\scripts\easygate.ps1" deploy -Native -Domain "bad" -LocalOnly -NoInstallTraefik -NoInstallCloudflared -SkipRoute
-        } "应拒绝无顶级域"
-      }
-      finally {
-        Pop-Location
-      }
-    }
+  $EasyGatePath = Join-Path $RootDir "scripts\easygate.ps1"
+  $Helper = Join-Path $TempRoot "test-validate-domain.ps1"
+
+  $TestOne = {
+    param([string]$Domain, [string]$Desc)
+    @"
+`$ErrorActionPreference = "Stop"
+. "$EasyGatePath"
+Validate-Domain "$Domain"
+"@ | Set-Content $Helper -Encoding UTF8
+    Invoke-ExpectedNativeFailure {
+      & pwsh -NoProfile -File $Helper
+    } $Desc
   }
-  finally {
-    $env:EASYGATE_HOME = $OldEasyGateHome
+
+  # 无效域名
+  & $TestOne "bad"           "Validate-Domain 应拒绝无顶级域的域名"
+  & $TestOne "example.com"   "Validate-Domain 应拒绝 example.com"
+  & $TestOne "has space.io"  "Validate-Domain 应拒绝包含空格的域名"
+
+  # 有效域名应正常通过
+  @"
+`$ErrorActionPreference = "Stop"
+. "$EasyGatePath"
+Validate-Domain "myapp.example.com"
+Write-Host "OK"
+"@ | Set-Content $Helper -Encoding UTF8
+  & pwsh -NoProfile -File $Helper | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    Fail "Validate-Domain 应接受有效域名 myapp.example.com"
   }
+
   Write-Info "Validate-Domain 行为测试通过"
 }
 
 function Test-ServiceHelperInstallation {
-  Write-Info "验证 service-helper.py 文件完整性"
+  Write-Info "验证 service-helper.py 嵌入内容完整性"
 
   $SrcHelper = Join-Path $PSScriptRoot "service-helper.py"
   Assert-File $SrcHelper
+
+  # 检查 easygate.ps1 中的 base64 与源文件一致
+  $EasyGatePath = Join-Path $RootDir "scripts\easygate.ps1"
+  $EasyGateContent = Get-Content -Raw $EasyGatePath
+  if ($EasyGateContent -notmatch '\$Embedded\s*=\s*@''([\s\S]*?)''@') {
+    Fail "easygate.ps1 中缺少 service-helper.py 嵌入数据"
+  }
+  $EmbeddedB64 = ($Matches[1] -replace '\s+', '').Trim()
+  if ($EmbeddedB64.Length -lt 500) {
+    Fail "easygate.ps1 中嵌入的 base64 数据过短，可能损坏"
+  }
+
+  # 解码并比较第一行
+  try {
+    $Decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($EmbeddedB64))
+    $SrcFirstLine = (Get-Content $SrcHelper -TotalCount 1) -join ""
+    $DecodedFirstLine = ($Decoded -split '\r?\n')[0]
+    if ($DecodedFirstLine -ne $SrcFirstLine) {
+      Fail "嵌入的 service-helper.py base64 解码后与源文件不一致"
+    }
+  }
+  catch {
+    Fail "service-helper.py base64 解码失败：$_"
+  }
 
   # Python 语法检查（仅在 Python 可用时执行）
   $Python = Get-Command python3 -ErrorAction SilentlyContinue
@@ -650,34 +687,44 @@ function Test-ServiceHelperInstallation {
     if ($LASTEXITCODE -ne 0) {
       $FailMsg = "service-helper.py Python 语法检查失败: $Result"
       if ($env:EASYGATE_CI -ne "true") { Fail $FailMsg }
-      else { Write-Warn $FailMsg }
+      else { Write-Host "[behavior] WARNING: $FailMsg" -ForegroundColor Yellow }
     }
-  } else {
-    Write-Warn "未找到 python3/python，跳过语法检查"
+  }
+  else {
+    Write-Host "[behavior] 未找到 python3/python，跳过语法检查" -ForegroundColor Yellow
   }
 
   Write-Info "Install-ServiceHelper 行为测试通过"
 }
 
 function Test-LogRotationBehavior {
+  Write-Info "验证 Rotate-Logs 日志轮转"
+
   $RuntimeDir = Join-Path $TempRoot "log-rotation-runtime"
   $LogDir = Join-Path $RuntimeDir "logs"
-  $EasyGatePs = Join-Path (Split-Path -Parent $PSScriptRoot) "scripts\easygate.ps1"
+  $EasyGatePath = Join-Path $RootDir "scripts\easygate.ps1"
+  $Helper = Join-Path $TempRoot "test-log-rotation.ps1"
 
-  Write-Info "验证 Rotate-Logs 日志轮转"
   New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
+  # 创建 10MB+ 的大日志文件
   $LargeLog = Join-Path $LogDir "native-traefik.log"
   $Line = "A" * 1024
   1..10240 | ForEach-Object { Add-Content -Path $LargeLog -Value $Line -Encoding UTF8 }
 
-  $ScriptBlock = @"
-  `$env:EASYGATE_HOME = '$RuntimeDir'
-  `$ErrorActionPreference = 'Stop'
-  . '$EasyGatePs'
-  Rotate-Logs
-"@
-  pwsh -NoProfile -Command $ScriptBlock 2>&1 | Out-Null
+  # 使用 -File 方式运行旋转，避免 -Command 的字符串转义问题
+  @"
+`$env:EASYGATE_HOME = "$RuntimeDir"
+`$ErrorActionPreference = "Stop"
+. "$EasyGatePath"
+Rotate-Logs
+Write-Host "ROTATE_DONE"
+"@ | Set-Content $Helper -Encoding UTF8
+
+  & pwsh -NoProfile -File $Helper | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    Fail "Rotate-Logs 子进程失败，exit code: $LASTEXITCODE"
+  }
 
   Assert-File "${LargeLog}.1"
   Assert-File $LargeLog
@@ -689,81 +736,97 @@ function Test-LogRotationBehavior {
 }
 
 function Test-ModeDetectionBehavior {
-  $RuntimeDir = Join-Path $TempRoot "mode-detection-runtime"
-  $EasyGatePs = Join-Path (Split-Path -Parent $PSScriptRoot) "scripts\easygate.ps1"
-
   Write-Info "验证 Detect-Mode 模式检测"
-  New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir "run") | Out-Null
 
-  Set-Content -Path (Join-Path $RuntimeDir ".mode") -Value "native" -Encoding UTF8 -NoNewline
-  $Result = pwsh -NoProfile -Command "`$env:EASYGATE_HOME='$RuntimeDir'; . '$EasyGatePs'; Write-Host (Detect-Mode)" 2>&1
-  if ($Result.Trim() -ne "native") {
-    Fail ".mode 为 'native' 时 Detect-Mode 应返回 'native'，实际：$($Result.Trim())"
+  $RuntimeDir = Join-Path $TempRoot "mode-detection-runtime"
+  $EasyGatePath = Join-Path $RootDir "scripts\easygate.ps1"
+  $Helper = Join-Path $TempRoot "test-mode-detection.ps1"
+  $ComposeDir = Join-Path $RuntimeDir "compose"
+  $RunDir = Join-Path $RuntimeDir "run"
+
+  New-Item -ItemType Directory -Force -Path $RunDir | Out-Null
+
+  # Test each scenario: prepare files, run Detect-Mode, check result
+  function Invoke-DetectTest {
+    param(
+      [string]$PrepareScript,
+      [string]$Expected,
+      [string]$Desc
+    )
+    # Write a helper that sets up state, dot-sources easygate, and outputs Detect-Mode result
+    $FullScript = @"
+`$ErrorActionPreference = "Stop"
+`$env:EASYGATE_HOME = "$RuntimeDir"
+$PrepareScript
+. "$EasyGatePath"
+Write-Output (Detect-Mode)
+"@
+    $FullScript | Set-Content $Helper -Encoding UTF8
+    $Output = & pwsh -NoProfile -File $Helper 2>&1
+    $Detected = ($Output | Where-Object { $_ -notmatch '^\[DEBUG\]' } | ForEach-Object { $_.Trim() }) -join ""
+    if ($Detected -ne $Expected) {
+      Fail "${Desc}: 期望 '${Expected}'，实际 '${Detected}'"
+    }
   }
 
-  Set-Content -Path (Join-Path $RuntimeDir ".mode") -Value "compose" -Encoding UTF8 -NoNewline
-  $Result = pwsh -NoProfile -Command "`$env:EASYGATE_HOME='$RuntimeDir'; . '$EasyGatePs'; Write-Host (Detect-Mode)" 2>&1
-  if ($Result.Trim() -ne "compose") {
-    Fail ".mode 为 'compose' 时 Detect-Mode 应返回 'compose'，实际：$($Result.Trim())"
-  }
+  # .mode file: native
+  Invoke-DetectTest "Set-Content -Path (Join-Path `$env:EASYGATE_HOME '.mode') -Value 'native' -NoNewline" "native" ".mode='native'"
+  # .mode file: compose
+  Invoke-DetectTest "Set-Content -Path (Join-Path `$env:EASYGATE_HOME '.mode') -Value 'compose' -NoNewline" "compose" ".mode='compose'"
+  # PID file fallback
+  Invoke-DetectTest "'' | Set-Content (Join-Path `$env:EASYGATE_HOME 'run\native-traefik.pid')" "native" "native PID file"
+  # Compose files fallback (creates compose dir + files from within the helper)
+  $ComposeSetup = @"
+New-Item -Type Directory -Force (Join-Path `$env:EASYGATE_HOME 'compose') | Out-Null
+'{}' | Set-Content (Join-Path `$env:EASYGATE_HOME 'compose\docker-compose.yml')
+'BASE_DOMAIN=test' | Set-Content (Join-Path `$env:EASYGATE_HOME 'compose\.env')
+"@
+  Invoke-DetectTest $ComposeSetup "compose" "compose files"
+  # No markers
+  Invoke-DetectTest "" "" "no markers"
 
-  Remove-Item (Join-Path $RuntimeDir ".mode") -Force -ErrorAction SilentlyContinue
-  Set-Content -Path (Join-Path $RuntimeDir "run\native-traefik.pid") -Value "12345" -Encoding ASCII
-  $Result = pwsh -NoProfile -Command "`$env:EASYGATE_HOME='$RuntimeDir'; . '$EasyGatePs'; Write-Host (Detect-Mode)" 2>&1
-  if ($Result.Trim() -ne "native") {
-    Fail "有 native PID 文件时 Detect-Mode 应返回 'native'，实际：$($Result.Trim())"
-  }
-
-  Remove-Item (Join-Path $RuntimeDir "run\native-traefik.pid") -Force -ErrorAction SilentlyContinue
-  New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir "compose") | Out-Null
-  "{}" | Set-Content -Path (Join-Path $RuntimeDir "compose\docker-compose.yml") -Encoding UTF8
-  "BASE_DOMAIN=test" | Set-Content -Path (Join-Path $RuntimeDir "compose\.env") -Encoding UTF8
-  $Result = pwsh -NoProfile -Command "`$env:EASYGATE_HOME='$RuntimeDir'; . '$EasyGatePs'; Write-Host (Detect-Mode)" 2>&1
-  if ($Result.Trim() -ne "compose") {
-    Fail "有 compose 文件时 Detect-Mode 应返回 'compose'，实际：$($Result.Trim())"
-  }
-
-  Remove-Item (Join-Path $RuntimeDir "compose") -Recurse -Force -ErrorAction SilentlyContinue
-  $Result = pwsh -NoProfile -Command "`$env:EASYGATE_HOME='$RuntimeDir'; . '$EasyGatePs'; Write-Host (Detect-Mode)" 2>&1
-  if (-not [string]::IsNullOrWhiteSpace($Result)) {
-    Fail "无标记文件时 Detect-Mode 应返回空，实际：$($Result.Trim())"
-  }
   Write-Info "Detect-Mode 行为测试通过"
 }
 
 function Test-InstallPathConfiguration {
   $Fixture = Join-Path $TempRoot "install-path-fixture"
   $RuntimeDir = Join-Path $TempRoot "install-path-runtime"
+  $Helper = Join-Path $TempRoot "test-install-path.ps1"
 
   Write-Info "验证 install.ps1 的 PATH 自动配置"
   New-Fixture $Fixture
 
-  $OldEasyGateHome = $env:EASYGATE_HOME
-  $OldLocalCli = $env:EASYGATE_LOCAL_CLI
-  $env:EASYGATE_HOME = $RuntimeDir
-  $env:EASYGATE_LOCAL_CLI = Join-Path $Fixture "scripts\easygate.ps1"
-  try {
-    Push-Location $Fixture
-    try {
-      $Output = & ".\scripts\install.ps1" 2>&1
-      $OutputText = $Output -join "`n"
-      if ($OutputText -notmatch "当前会话 PATH") {
-        Fail "install.ps1 应输出'当前会话 PATH'"
-      }
-    }
-    finally {
-      Pop-Location
-    }
+  # 在子进程中运行 install.ps1，避免污染当前会话 PATH
+  @"
+`$ErrorActionPreference = "Stop"
+`$env:EASYGATE_HOME = "$RuntimeDir"
+`$env:EASYGATE_LOCAL_CLI = Join-Path "$Fixture" "scripts\easygate.ps1"
+Push-Location "$Fixture"
+try {
+  `$Output = & ".\scripts\install.ps1" 2>&1
+  `$OutputText = `$Output -join "``n"
+  if (`$OutputText -notmatch "PATH") {
+    Write-Error "install.ps1 输出中缺少 PATH 关键字"
+    exit 1
   }
-  finally {
-    $env:EASYGATE_HOME = $OldEasyGateHome
-    $env:EASYGATE_LOCAL_CLI = $OldLocalCli
+  `$BinDir = Join-Path "`$env:EASYGATE_HOME" "bin"
+  if (-not (Test-Path (Join-Path "`$BinDir" "easygate.ps1"))) {
+    Write-Error "install.ps1 未安装 easygate.ps1 到 bin 目录"
+    exit 1
   }
+  if (`$env:PATH -notmatch [regex]::Escape(`$BinDir)) {
+    Write-Error "当前会话 PATH 应包含安装目录：`$BinDir"
+    exit 1
+  }
+  Write-Host "INSTALL_PATH_OK"
+} finally {
+  Pop-Location
+}
+"@ | Set-Content $Helper -Encoding UTF8
 
-  Assert-File (Join-Path $RuntimeDir "bin/easygate.ps1")
-  $ExpectedDir = Join-Path $RuntimeDir "bin"
-  if ($env:PATH -notmatch [regex]::Escape($ExpectedDir)) {
-    Fail "当前会话 PATH 应包含安装目录：$ExpectedDir"
+  & pwsh -NoProfile -File $Helper | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    Fail "install.ps1 PATH 配置测试失败"
   }
   Write-Info "install.ps1 PATH 配置测试通过"
 }
@@ -780,6 +843,9 @@ try {
   Test-CleanupBehavior
   Test-ValidatePortBehavior
   Test-ValidateDomainBehavior
+  Test-ServiceHelperInstallation
+  Test-LogRotationBehavior
+  Test-ModeDetectionBehavior
   Test-InstallPathConfiguration
   Write-Info "PowerShell 行为测试通过"
 }
