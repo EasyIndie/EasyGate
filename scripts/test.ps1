@@ -137,6 +137,12 @@ if ($InstallSh -notmatch "EASYGATE_LOCAL_CLI") {
 if ($InstallPs -notmatch "EASYGATE_LOCAL_CLI") {
   Fail "install.ps1 缺少本地 CLI 安装测试入口"
 }
+if ($InstallPs -notmatch 'SetEnvironmentVariable.*Path.*User') {
+  Fail "install.ps1 缺少用户环境变量 PATH 写入逻辑（重启持久化）"
+}
+if ($InstallPs -notmatch '\$env:Path = \"\$InstallDir;\$env:Path\"') {
+  Fail "install.ps1 缺少当前会话 PATH 配置"
+}
 if ($LibSh -notmatch "cloudflared-linux-") {
   Fail "lib.sh 缺少 Linux cloudflared 下载逻辑"
 }
@@ -165,6 +171,62 @@ if ($EasyGateSh -notmatch "traefik_v") {
 if ($LocalNativePs -notmatch "EASYGATE_CLI") {
   Fail "local-acceptance-native.ps1 缺少独立 CLI 覆盖入口"
 }
+
+Write-Info "检查 Windows 重启持久化（计划任务）"
+if ($EasyGatePs -notmatch "Register-NativeScheduledTask") {
+  Fail "easygate.ps1 缺少计划任务注册函数（重启持久化）"
+}
+if ($EasyGatePs -notmatch "Unregister-NativeScheduledTask") {
+  Fail "easygate.ps1 缺少计划任务删除函数"
+}
+if ($EasyGatePs -notmatch "schtasks /create") {
+  Fail "easygate.ps1 缺少 schtasks 计划任务创建逻辑"
+}
+if ($EasyGatePs -notmatch "schtasks /delete") {
+  Fail "easygate.ps1 缺少 schtasks 计划任务删除逻辑"
+}
+if ($EasyGatePs -notmatch 'Invoke-Uninstall[\s\S]*?Unregister-NativeScheduledTask') {
+  Fail "easygate.ps1 的 Invoke-Uninstall 未调用 Unregister-NativeScheduledTask"
+}
+
+Write-Info "检查输入验证与端口检查"
+$MissingValidation = @()
+if ($EasyGatePs -notmatch "function Validate-Port") { $MissingValidation += "Validate-Port" }
+if ($EasyGatePs -notmatch "function Validate-Domain") { $MissingValidation += "Validate-Domain" }
+if ($EasyGatePs -notmatch "function Test-PortAvailable") { $MissingValidation += "Test-PortAvailable" }
+if ($EasyGatePs -notmatch "function Test-ProcessStarted") { $MissingValidation += "Test-ProcessStarted" }
+if ($EasyGatePs -notmatch "function Rotate-Logs") { $MissingValidation += "Rotate-Logs" }
+if ($EasyGatePs -notmatch "function Install-ServiceHelper") { $MissingValidation += "Install-ServiceHelper" }
+if ($MissingValidation.Count -gt 0) {
+  Fail "easygate.ps1 缺少以下函数：$($MissingValidation -join ', ')"
+}
+
+Write-Info "检查验证函数集成"
+if ($EasyGatePs -notmatch 'Deploy-Native[\s\S]*?Validate-Domain') {
+  Fail "Deploy-Native 未调用 Validate-Domain"
+}
+if ($EasyGatePs -notmatch 'Deploy-Native[\s\S]*?Test-PortAvailable') {
+  Fail "Deploy-Native 未调用 Test-PortAvailable"
+}
+if ($EasyGatePs -notmatch 'Deploy-Native[\s\S]*?Test-ProcessStarted') {
+  Fail "Deploy-Native 未调用 Test-ProcessStarted"
+}
+if ($EasyGatePs -notmatch 'Deploy-Native[\s\S]*?Install-ServiceHelper') {
+  Fail "Deploy-Native 未调用 Install-ServiceHelper"
+}
+if ($EasyGatePs -notmatch 'Deploy-Native[\s\S]*?Rotate-Logs') {
+  Fail "Deploy-Native 未调用 Rotate-Logs"
+}
+if ($EasyGatePs -notmatch 'Start-NativeServices[\s\S]*?Test-PortAvailable') {
+  Fail "Start-NativeServices 未调用 Test-PortAvailable"
+}
+
+Write-Info "检查卸载 PATH 清理"
+if ($EasyGatePs -notmatch "SetEnvironmentVariable.*Path.*User") {
+  Fail "Invoke-Uninstall 缺少用户 PATH 清理"
+}
+
+Write-Info "检查 install.ps1 PATH 自动配置"
 
 Write-Info "检查 GitHub Actions Node 24 兼容配置"
 $WorkflowText = Get-Content -Raw ".github/workflows/ci.yml"

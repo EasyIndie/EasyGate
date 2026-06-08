@@ -131,6 +131,219 @@ function Parse-Options {
   return $Options
 }
 
+# ── 输入验证 ──────────────────────────────────────────────────────────
+
+function Validate-Port {
+  param([string]$Port, [string]$Label = "port")
+  if (-not ($Port -match '^\d+$')) {
+    Fail "${Label} 必须是数字：$Port"
+  }
+  $p = [int]$Port
+  if ($p -lt 1 -or $p -gt 65535) {
+    Fail "${Label} 超出范围 (1-65535)：$Port"
+  }
+}
+
+function Validate-Domain {
+  param([string]$Domain)
+  if ($Domain -eq "example.com") {
+    Fail "请使用真实域名，不要使用 example.com"
+  }
+  if ($Domain -notmatch '\.') {
+    Fail "域名格式不正确：${Domain}（缺少顶级域）"
+  }
+  if ($Domain -match '\s') {
+    Fail "域名不能包含空格：${Domain}"
+  }
+}
+
+function Test-PortAvailable {
+  param([string]$Port, [string]$Label = "port")
+  $Connections = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners()
+  foreach ($Conn in $Connections) {
+    if ($Conn.Port -eq [int]$Port) {
+      Fail "${Label} $Port 已被占用，请先停止该进程再部署"
+    }
+  }
+}
+
+# ── 进程验证 ──────────────────────────────────────────────────────────
+
+function Test-ProcessStarted {
+  param([string]$Name)
+  if ($env:EASYGATE_CI -eq "true") { return }
+  Start-Sleep -Seconds 1
+  $PidFile = Join-Path $EasyGateHome "run\$Name.pid"
+  $LogFile = Join-Path $EasyGateHome "logs\$Name.log"
+  if (-not (Test-Path $PidFile)) { return }
+  $PidText = (Get-Content -Raw $PidFile).Trim()
+  if ([string]::IsNullOrWhiteSpace($PidText)) { return }
+  $Process = Get-Process -Id ([int]$PidText) -ErrorAction SilentlyContinue
+  if (-not $Process) {
+    Write-Host "[easygate] ${Name} 启动失败！日志（$LogFile）：" -ForegroundColor Red
+    if (Test-Path $LogFile) { Get-Content $LogFile -Tail 20 | ForEach-Object { Write-Host "  $_" -ForegroundColor Red } }
+    else { Write-Host "[easygate] 日志文件不存在" -ForegroundColor Red }
+    Fail "${Name} 启动失败"
+  }
+}
+
+# ── 日志轮转 ──────────────────────────────────────────────────────────
+
+function Rotate-Logs {
+  $MaxSize = if ($env:EASYGATE_LOG_MAX_SIZE) { [int]$env:EASYGATE_LOG_MAX_SIZE } else { 10485760 }
+  $Keep = if ($env:EASYGATE_LOG_KEEP) { [int]$env:EASYGATE_LOG_KEEP } else { 5 }
+  $LogDir = Join-Path $EasyGateHome "logs"
+  if (-not (Test-Path $LogDir)) { return }
+  Get-ChildItem "$LogDir\*.log" -File | ForEach-Object {
+    if ($_.Length -gt $MaxSize) {
+      $Base = $_.FullName
+      Remove-Item "${Base}.${Keep}" -Force -ErrorAction SilentlyContinue
+      for ($i = $Keep - 1; $i -ge 1; $i--) {
+        $OldFile = "${Base}.${i}"
+        if (Test-Path $OldFile) {
+          Move-Item $OldFile "${Base}.$($i + 1)" -Force
+        }
+      }
+      Move-Item $Base "${Base}.1" -Force
+      New-Item $Base -ItemType File -Force | Out-Null
+      Write-Info "已轮转日志：$($_.Name)"
+    }
+  }
+}
+
+function Install-ServiceHelper {
+  $LibDir = Join-Path $EasyGateHome "lib"
+  New-Item -ItemType Directory -Force -Path $LibDir | Out-Null
+  $Target = Join-Path $LibDir "service-helper.py"
+  if (Test-Path $Target) { return }
+  $Embedded = @'
+IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwoiIiJFYXN5R2F0ZSBzZXJ2aWNlIGhlbHBlciDigJQgYWRk
+L3JlbW92ZS9saXN0IHNlcnZpY2VzIGluIFRyYWVmaWsgZHluYW1pYyBZQU1MLiIiIgoKaW1wb3J0
+IHN5cywgcmUKCmRlZiBnZXRfaW5kZW50KGxpbmUpOgogICAgIiIiUmV0dXJuIGluZGVudGF0aW9u
+IGxldmVsIChudW1iZXIgb2YgbGVhZGluZyBzcGFjZXMpLiIiIgogICAgcmV0dXJuIGxlbihsaW5l
+KSAtIGxlbihsaW5lLmxzdHJpcCgiICIpKQoKZGVmIGdldF9zZWN0aW9uX2JvdW5kYXJpZXMobGlu
+ZXMpOgogICAgIiIiRmluZCBzdGFydCBhbmQgZW5kIG9mIHJvdXRlcnMgYW5kIHNlcnZpY2VzIHNl
+Y3Rpb25zLiIiIgogICAgcm91dGVyc19zdGFydCA9IHNlcnZpY2VzX3N0YXJ0ID0gLTEKICAgIGZv
+ciBpLCBsaW5lIGluIGVudW1lcmF0ZShsaW5lcyk6CiAgICAgICAgcyA9IGxpbmUucnN0cmlwKCkK
+ICAgICAgICBpZiBzIGluICgiICByb3V0ZXJzOiIsICIgIHJvdXRlcnM6IHt9Iik6CiAgICAgICAg
+ICAgIHJvdXRlcnNfc3RhcnQgPSBpCiAgICAgICAgZWxpZiBzIGluICgiICBzZXJ2aWNlczoiLCAi
+ICBzZXJ2aWNlczoge30iKToKICAgICAgICAgICAgc2VydmljZXNfc3RhcnQgPSBpCiAgICByZXR1
+cm4gcm91dGVyc19zdGFydCwgc2VydmljZXNfc3RhcnQKCmRlZiBmaW5kX2VudHJpZXMobGluZXMs
+IHNlY3Rpb25fc3RhcnQpOgogICAgIiIiRmluZCBlbnRyaWVzIGluIGEgWUFNTCBzZWN0aW9uIChu
+YW1lcyBvZiA0LXNwYWNlIGluZGVudGVkIGJsb2NrcykuIiIiCiAgICBlbnRyaWVzID0ge30KICAg
+IGlmIHNlY3Rpb25fc3RhcnQgPCAwOgogICAgICAgIHJldHVybiBlbnRyaWVzCiAgICBpID0gc2Vj
+dGlvbl9zdGFydCArIDEKICAgIHdoaWxlIGkgPCBsZW4obGluZXMpOgogICAgICAgIGxpbmUgPSBs
+aW5lc1tpXQogICAgICAgIGlmIG5vdCBsaW5lLnN0cmlwKCk6CiAgICAgICAgICAgIGkgKz0gMQog
+ICAgICAgICAgICBjb250aW51ZQogICAgICAgIGluZGVudCA9IGdldF9pbmRlbnQobGluZSkKICAg
+ICAgICBpZiBpbmRlbnQgPT0gNCAgYW5kIGxpbmUucnN0cmlwKCkuZW5kc3dpdGgoIjoiKToKICAg
+ICAgICAgICAgbmFtZSA9IGxpbmUuc3RyaXAoKVstOl0KICAgICAgICAgICAgaiA9IGkgKyAxCiAg
+ICAgICAgICAgIHdoaWxlIGogPCBsZW4obGluZXMpIGFuZCAoZ2V0X2luZGVudChsaW5lc1tqXSkg
+PiA0IG9yIG5vdCBsaW5lc1tqXS5zdHJpcCgpKToKICAgICAgICAgICAgICAgIGogKz0gMQogICAg
+ICAgICAgICBlbnRyaWVzW25hbWVdID0gKGksIGopCiAgICAgICAgICAgIGkgPSBqCiAgICAgICAg
+ZWxpZiBpbmRlbnQgPD0gMjogIAogICAgICAgICAgICBicmVhawogICAgICAgIGVsc2U6CiAgICAg
+ICAgICAgIGkgKz0gMQogICAgcmV0dXJuIGVudHJpZXMKCmRlZiBsaXN0X3NlcnZpY2VzKHBhdGgp
+OgogICAgdHJ5OgogICAgICAgIHdpdGggb3BlbihwYXRoKSBhcyBmOgogICAgICAgICAgICBsaW5l
+cyA9IGYucmVhZGxpbmVzKCkKICAgIGV4Y2VwdCBGaWxlTm90Rm91bmRFcnJvcjoKICAgICAgICBw
+cmludCgi5pqC5peg5bey6YWN572u55qE5pyN5YqhIikKICAgICAgICByZXR1cm4KCiAgICByb3V0
+ZXJzX3N0YXJ0LCBzZXJ2aWNlc19zdGFydCA9IGdldF9zZWN0aW9uX2JvdW5kYXJpZXMobGluZXMp
+CiAgICByb3V0ZXJzID0gZmluZF9lbnRyaWVzKGxpbmVzLCByb3V0ZXJzX3N0YXJ0KQogICAgc2Vy
+dmljZXMgPSBmaW5kX2VudHJpZXMobGluZXMsIHNlcnZpY2VzX3N0YXJ0KQoKICAgIGFsbF9zdmNz
+ID0ge30KICAgIGZvciBuYW1lLCAoc3RhcnQsIGVuZCkgaW4gcm91dGVycy5pdGVtcygpOgogICAg
+ICAgIGluZm8gPSB7Imhvc3QiOiAiPyIsICJ1cmwiOiAiPyJ9CiAgICAgICAgZm9yIGkgaW4gcmFu
+Z2Uoc3RhcnQsIGVuZCk6CiAgICAgICAgICAgIHMgPSBsaW5lc1tpXS5zdHJpcCgpCiAgICAgICAg
+ICAgIG0gPSByZS5zZWFyY2gociJIb3N0KGBbXildKylgXCkiLCBzKQogICAgICAgICAgICBpZiBt
+OgogICAgICAgICAgICAgICAgaW5mb1siaG9zdCJdID0gbS5ncm91cCgxKQogICAgICAgICAgICBp
+ZiBzLnN0YXJ0c3dpdGgoInNlcnZpY2U6ICIpIGFuZCBzICE9ICJzZXJ2aWNlOiBhcGlAaW50ZXJu
+YWwiOgogICAgICAgICAgICAgICAgcGFzcwogICAgICAgIGFsbF9zdmNzW25hbWVdID0gaW5mbwoK
+ICAgIGZvciBuYW1lLCAoc3RhcnQsIGVuZCkgaW4gc2VydmljZXMuaXRlbXMoKToKICAgICAgICBp
+bmZvID0gYWxsX3N2Y3MuZ2V0KG5hbWUsIHsiaG9zdCI6ICI/IiwgInVybCI6ICI/In0pCiAg
+ICAgICAgYWxsX3N2Y3NbbmFtZV0gPSBpbmZvCiAgICAgICAgZm9yIGkgaW4gcmFuZ2Uoc3RhcnQs
+IGVuZCk6CiAgICAgICAgICAgIHMgPSBsaW5lc1tpXS5zdHJpcCgpCiAgICAgICAgICAgIGlmIHMu
+c3RhcnRzd2l0aCgiLSB1cmw6Iik6CiAgICAgICAgICAgICAgICBpbmZvWyJ1cmwiXSA9IHMuc3Bs
+aXQoIi0gdXJsOiIsIDEpWzFdLnN0cmlwKCkKCiAgICBpZiBhbGxfc3ZjczoKICAgICAgICBwcmlu
+dChmInt9ezw2IH17OjIwfSB7OjM1fSB7On0iLmZvcm1hdCgiTmFtZSIsICJIb3N0IiwgIlVSTCIp
+KQogICAgICAgIHByaW50KCItIiAqIDgwKQogICAgICAgIGZvciBuYW1lIGluIHNvcnRlZChhbGxf
+c3Zjcyk6CiAgICAgICAgICAgIGluZm8gPSBhbGxfc3Zjc1tuYW1lXQogICAgICAgICAgICBwcmlu
+dChmInt9ezw2IH17OjIwfSB7OjM1fSB7On0iLmZvcm1hdChuYW1lLCBpbmZvLmdldCgnaG9zdCcs
+ICc/JyksIGluZm8uZ2V0KCd1cmwnLCAnPycpKSkKICAgIGVsc2U6CiAgICAgICAgcHJpbnQoIuac
+gumXoOW3sumFjee9rueahOacjeWKoSIpCgpkZWYgYWRkX3NlcnZpY2UocGF0aCwgbmFtZSwgaG9z
+dCwgdXJsKToKICAgIHRyeToKICAgICAgICB3aXRoIG9wZW4ocGF0aCkgYXMgZjoKICAgICAgICAg
+ICAgbGluZXMgPSBmLnJlYWRsaW5lcygpCiAgICBleGNlcHQgRmlsZU5vdEZvdW5kRXJyb3I6CiAg
+ICAgICAgbGluZXMgPSBbImh0dHA6XG4iLCAiICByb3V0ZXJzOiB7fVxuIiwgIiAgc2VydmljZXM6
+IHt9XG4iXQoKICAgIHJvdXRlcnNfc3RhcnQsIHNlcnZpY2VzX3N0YXJ0ID0gZ2V0X3NlY3Rpb25f
+Ym91bmRhcmllcyhsaW5lcykKICAgIHJvdXRlcnMgPSBmaW5kX2VudHJpZXMobGluZXMsIHJvdXRl
+cnNfc3RhcnQpCiAgICBpZiBuYW1lIGluIHJvdXRlcnM6CiAgICAgICAgcHJpbnQoZiJbZWFzeWdh
+dGVdIOacjeWKoSB7bmFtZX0g5bel5a2Y5ZyoIiwgZmlsZT1zeXMuc3RkZXJyKQogICAgICAgIHN5
+cy5leGl0KDEpCgogICAgZm9yIGksIGxpbmUgaW4gZW51bWVyYXRlKGxpbmVzKToKICAgICAgICBp
+ZiBsaW5lLnJzdHJpcCgpID09ICIgIHJvdXRlcnM6IHt9IjoKICAgICAgICAgICAgbGluZXNbaV0g
+PSAiICByb3V0ZXJzOlxuIgogICAgICAgIGVsaWYgbGluZS5yc3RyaXAoKSA9PSAiICBzZXJ2aWNl
+czoge30iOgogICAgICAgICAgICBsaW5lc1tpXSA9ICIgIHNlcnZpY2VzOlxuIgoKICAgIHJvdXRl
+cl9ibG9jayA9IFsKICAgICAgICBmIiAgICAge25hbWV9OlxuIiwKICAgICAgICBmIiAgICAgIHJ1
+bGU6IEhvc3QoYHtob3N0fWApXG4iLAogICAgICAgIGYiICAgICAgZW50cnlQb2ludHM6XG4iLAog
+ICAgICAgIGYiICAgICAgICAtIHdlYlxuIiwKICAgICAgICBmIiAgICAgIHNlcnZpY2U6IHtuYW1l
+fVxuIiwKICAgIF0KICAgIHNlcnZpY2VfYmxvY2sgPSBbCiAgICAgICAgZiIgICAge25hbWV9Olxu
+IiwKICAgICAgICBmIiAgICAgIGxvYWRCYWxhbmNlcjpcbiIsCiAgICAgICAgZiIgICAgICAgIHNl
+cnZlcnM6XG4iLAogICAgICAgIGYiICAgICAgICAgIC0gdXJsOiB7dXJsfVxuIiwKICAgIF0KCiAg
+ICByb3V0ZXJzX3N0YXJ0LCBzZXJ2aWNlc19zdGFydCA9IGdldF9zZWN0aW9uX2JvdW5kYXJpZXMo
+bGluZXMpCgogICAgaWYgc2VydmljZXNfc3RhcnQgPj0gMDoKICAgICAgICBmb3IgaXRlbSBpbiBy
+ZXZlcnNlZChyb3V0ZXJfYmxvY2spOgogICAgICAgICAgICBsaW5lcy5pbnNlcnQoc2VydmljZXNf
+c3RhcnQsIGl0ZW0pCiAgICAgICAgcm91dGVyc19zdGFydCwgc2VydmljZXNfc3RhcnQgPSBnZXRf
+c2VjdGlvbl9ib3VuZGFyaWVzKGxpbmVzKQogICAgICAgIGogPSBzZXJ2aWNlc19zdGFydCArIDEK
+ICAgICAgICB3aGlsZSBqIDwgbGVuKGxpbmVzKSBhbmQgKGdldF9pbmRlbnQobGluZXNbal0pID49
+IDQgb3Igbm90IGxpbmVzW2pdLnN0cmlwKCkpOgogICAgICAgICAgICBqICs9IDEKICAgICAgICBm
+b3IgaXRlbSBpbiByZXZlcnNlZChzZXJ2aWNlX2Jsb2NrKToKICAgICAgICAgICAgbGluZXMuaW5z
+ZXJ0KGosIGl0ZW0pCiAgICBlbHNlOgogICAgICAgIGxpbmVzLmFwcGVuZCgiXG4iKQogICAgICAg
+IGxpbmVzLmV4dGVuZChyb3V0ZXJfYmxvY2spCiAgICAgICAgbGluZXMuYXBwZW5kKCIgIHNlcnZp
+Y2VzOlxuIikKICAgICAgICBsaW5lcy5leHRlbmQoc2VydmljZV9ibG9jaykKCiAgICB3aXRoIG9w
+ZW4ocGF0aCwgInciKSBhcyBmOgogICAgICAgIGYud3JpdGVsaW5lcyhsaW5lcykKICAgIHByaW50
+KGYiW2Vhc3lnYXRlXSDlt7Lmt7vliqDmnI3liqHvvJp7bmFtZX0g4oaSIHtob3N0fSDihpIge3Vy
+bH0iKQoKZGVmIHJlbW92ZV9zZXJ2aWNlKHBhdGgsIG5hbWUpOgogICAgd2l0aCBvcGVuKHBhdGgp
+IGFzIGY6CiAgICAgICAgbGluZXMgPSBmLnJlYWRsaW5lcygpCgogICAgcm91dGVyc19zdGFydCwg
+c2VydmljZXNfc3RhcnQgPSBnZXRfc2VjdGlvbl9ib3VuZGFyaWVzKGxpbmVzKQogICAgcm91dGVy
+cyA9IGZpbmRfZW50cmllcyhsaW5lcywgcm91dGVyc19zdGFydCkKICAgIGlmIG5hbWUgbm90IGlu
+IHJvdXRlcnM6CiAgICAgICAgcHJpbnQoZiJbZWFzeWdhdGVdIOacjeWKoSB7bmFtZX0g5LiN5a2Y
+5ZyoIiwgZmlsZT1zeXMuc3RkZXJyKQogICAgICAgIHN5cy5leGl0KDEpCgogICAgIyBFbnRyeSBz
+dGFydC9lbmQgbGluZXMgYXJlIGZyb20gcm91dGVycyBkaWN0CiAgICBzdGFydCwgZW5kID0gcm91
+dGVyc1tuYW1lXQoKICAgICMgUmVtb3ZlIGZyb20gZW5kIHRvIHN0YXJ0IChpbmNsdXNpdmUsIGJh
+Y2t3YXJkcykKICAgIGRlbCBsaW5lc1tzdGFydDplbmQrMV0KCiAgICByb3V0ZXJzX3N0YXJ0LCBz
+ZXJ2aWNlc19zdGFydCA9IGdldF9zZWN0aW9uX2JvdW5kYXJpZXMobGluZXMpCiAgICBpZiByb3V0
+ZXJzX3N0YXJ0IDwgMCBvciBzZXJ2aWNlc19zdGFydCA8IDA6CiAgICAgICAgIyBObyBtb3JlIHNl
+cnZpY2VzLCBwdXQge30gYmFjawogICAgICAgIGxpbmVzLmFwcGVuZCgiICByb3V0ZXJzOiB7fVxu
+IikKICAgICAgICBsaW5lcy5hcHBlbmQoIiAgc2VydmljZXM6IHt9XG4iKQogICAgZWxzZToKICAg
+ICAgICBzZXJ2aWNlcyA9IGZpbmRfZW50cmllcyhsaW5lcywgc2VydmljZXNfc3RhcnQpCiAgICAg
+ICAgaWYgZW1wdHkoc2VydmljZXMpOgogICAgICAgICAgICBsaW5lc1tzZXJ2aWNlc19zdGFydF0g
+PSAiICBzZXJ2aWNlczoge31cbiIKCiAgICB3aXRoIG9wZW4ocGF0aCwgInciKSBhcyBmOgogICAg
+ICAgIGYud3JpdGVsaW5lcyhsaW5lcykKICAgIHByaW50KGYiW2Vhc3lnYXRlXSDlt7LliKDpmaTm
+nI3liqHvvJp7bmFtZX0iKQoKCmlmIF9fbmFtZV9fID09ICJfX21haW5fXyI6CiAgICBpZiBsZW4o
+c3lzLmFyZ3YpIDwgMzoKICAgICAgICBwcmludCgi55So5rOVOiBzZXJ2aWNlLWhlbHBlci5weSB7
+YWRkfHJlbW92ZXxsaXN0fSA8cGF0aD4gPG5hbWU+IFtob3N0XSBbdXJsXSIpCiAgICAgICAgc3lz
+LmV4aXQoMSkKCiAgICBjbWQgPSBzeXMuYXJndlsxXQoKICAgIGlmIGNtZCA9PSAibGlzdCI6CiAg
+ICAgICAgaWYgbGVuKHN5cy5hcmd2KSA8IDI6CiAgICAgICAgICAgIHByaW50KCLnvJPlr7nml6Dm
+t7vliqDmnI3liqHnmoTov57mjqXvvIxzbGlzdOWPr+iDveW3suaXoOaXoOeJiOacrOS/neaKpCIp
+CiAgICAgICAgICAgIHN5cy5leGl0KDEpCiAgICAgICAgbGlzdF9zZXJ2aWNlcyhzeXMuYXJndlsy
+XSkKICAgIGVsaWYgY21kID09ICJhZGQiOgogICAgICAgIGlmIGxlbihzeXMuYXJndikgPCA1Ogog
+ICAgICAgICAgICBwcmludCgi55So5rOVOiBzZXJ2aWNlLWhlbHBlci5weSBhZGQgPHBhdGg+IDxu
+YW1lPiA8aG9zdD4gPHVybD4iKQogICAgICAgICAgICBzeXMuZXhpdCgxKQogICAgICAgIGFkZF9z
+ZXJ2aWNlKHN5cy5hcmd2WzJdLCBzeXMuYXJndlszXSwgc3lzLmFyZ3ZbNF0sIHN5cy5hcmd2WzVd
+KQogICAgZWxpZiBjbWQgPT0gInJlbW92ZSI6CiAgICAgICAgaWYgbGVuKHN5cy5hcmd2KSA8IDM6
+CiAgICAgICAgICAgIHByaW50KCLnlKjms5U6IHNlcnZpY2UtaGVscGVyLnB5IHJlbW92ZSA8cGF0
+aD4gPG5hbWU+IikKICAgICAgICAgICAgc3lzLmV4aXQoMSkKICAgICAgICByZW1vdmVfc2Vydmlj
+ZShzeXMuYXJndlsyXSwgc3lzLmFyZ3ZbM10pCiAgICBlbHNlOgogICAgICAgIHByaW50KGLmnI3n
+p7DnmoTlrZfnrKbvvJp7Y21kfe+8jOWPr+iDveWPr+aYr2FkZHxyZW1vdmV8bGlzdCIpCiAgICAg
+ICAgc3lzLmV4aXQoMSkK'@
+  try {
+    $Bytes = [System.Convert]::FromBase64String($Embedded)
+    $Utf8 = [System.Text.Encoding]::UTF8
+    $Utf8.GetString($Bytes) | Set-Content -Path $Target -Encoding UTF8
+    Write-Info "已安装 service-helper 到 $Target"
+  }
+  catch {
+    # fallback: 从源码目录复制
+    $Src = Join-Path $PSScriptRoot "service-helper.py"
+    if (Test-Path $Src) { Copy-Item $Src $Target -Force }
+  }
+}
+
 function Write-ModeFile {
   param([string]$Mode)
   Set-Content -Path (Join-Path $EasyGateHome ".mode") -Value "$Mode" -Encoding UTF8 -NoNewline
@@ -479,12 +692,11 @@ function Deploy-Compose {
   if ([string]::IsNullOrWhiteSpace($Domain)) {
     $Domain = Prompt-Default "请输入主域名" "example.com"
   }
-  if ($Domain -eq "example.com") {
-    Fail "请使用真实域名，不要使用 example.com"
-  }
+  Validate-Domain $Domain
   $Tunnel = Get-OptionValue $Options "Tunnel" "easygate-home"
   $Dashboard = Get-OptionValue $Options "Dashboard" "traefik.$Domain"
   $Port = Get-OptionValue $Options "Port" "18080"
+  Validate-Port $Port "Traefik 端口"
 
   New-Item -ItemType Directory -Force -Path (Join-Path $EasyGateHome "cloudflared"), $ComposeDir | Out-Null
   Write-TraefikTemplates
@@ -538,6 +750,7 @@ function Deploy-Compose {
     Write-Info "启动演示服务"
     Invoke-EasyGateCompose --profile demo up -d demo-api demo-test-api
   }
+  Install-ServiceHelper
   Write-Info "部署完成"
   Write-ModeFile "compose"
   Write-Host ""
@@ -667,6 +880,47 @@ function Stop-NativeDemo {
   Write-Info "原生 demo 服务已停止"
 }
 
+# ── Windows 计划任务注册（重启持久化） ────────────────────────────────
+# 等价于 Linux: register_systemd() / macOS: register_launchd()
+
+function Register-NativeScheduledTask {
+  $TaskName = "EasyGate"
+  $ScriptPath = Join-Path $EasyGateHome "bin\easygate.ps1"
+
+  if (-not (Test-Path $ScriptPath)) {
+    Write-Warn "未找到 easygate.ps1：$ScriptPath，跳过计划任务注册"
+    return
+  }
+
+  # 先尝试删除已有任务（忽略错误）
+  schtasks /delete /tn "$TaskName" /f 2>$null
+
+  $Command = "powershell -ExecutionPolicy Bypass -File `"$ScriptPath`" start"
+  Write-Info "注册计划任务（用户登录时自动启动原生服务）：$TaskName"
+
+  # /sc onlogon — 用户登录时触发（无需管理员）
+  # /rl limited  — 以当前用户权限运行
+  # /delay 0000:30 — 延迟 30 秒，等系统就绪
+  # /f — 覆盖已有任务
+  schtasks /create /tn "$TaskName" /tr "$Command" /sc onlogon /rl limited /delay 0000:30 /f 2>$null
+
+  if ($LASTEXITCODE -eq 0) {
+    Write-Info "计划任务已注册：$TaskName（用户登录后自动启动）"
+  }
+  else {
+    Write-Warn "计划任务注册失败（可能需要管理员权限）"
+    Write-Warn "可手动注册：schtasks /create /tn EasyGate /tr `"$Command`" /sc onlogon /rl limited /delay 0000:30 /f"
+  }
+}
+
+function Unregister-NativeScheduledTask {
+  $TaskName = "EasyGate"
+  schtasks /delete /tn "$TaskName" /f 2>$null
+  if ($LASTEXITCODE -eq 0) {
+    Write-Info "计划任务已删除：$TaskName"
+  }
+}
+
 function Deploy-Native {
   param([string[]]$FuncArgs)
   $Options = Parse-Options $FuncArgs
@@ -685,14 +939,16 @@ function Deploy-Native {
   if ([string]::IsNullOrWhiteSpace($Domain)) {
     $Domain = Prompt-Default "请输入主域名" "example.com"
   }
-  if ($Domain -eq "example.com" -and -not $LocalOnly) {
-    Fail "请使用真实域名，不要使用 example.com"
-  }
+  Validate-Domain $Domain
   $Tunnel = Get-OptionValue $Options "Tunnel" "easygate-home"
   $Dashboard = Get-OptionValue $Options "Dashboard" "traefik.$Domain"
   $Port = Get-OptionValue $Options "Port" "18080"
   $ApiPort = Get-OptionValue $Options "ApiPort" "19080"
   $TestApiPort = Get-OptionValue $Options "TestApiPort" "19081"
+  Validate-Port $Port "Traefik 端口"
+  Validate-Port $ApiPort "Demo API 端口"
+  Validate-Port $TestApiPort "Demo Test API 端口"
+  Test-PortAvailable $Port "Traefik 端口"
 
   New-Item -ItemType Directory -Force -Path (Join-Path $EasyGateHome "native\dynamic"), (Join-Path $EasyGateHome "run"), (Join-Path $EasyGateHome "logs"), (Join-Path $EasyGateHome "cloudflared") | Out-Null
   @(
@@ -796,10 +1052,19 @@ http:
     Start-NativeProcess "native-demo-test-api" $Python @($DemoScript, "--port", $TestApiPort)
   }
 
+  Install-ServiceHelper
+
   Start-NativeProcess "native-traefik" "traefik" @("--configFile", (Join-Path $EasyGateHome "native\traefik.yml"))
+  Test-ProcessStarted "native-traefik"
   if (-not $LocalOnly) {
     Start-NativeProcess "native-cloudflared" "cloudflared" @("tunnel", "--config", (Join-Path $EasyGateHome "cloudflared\config.native.yml"), "run")
+    Test-ProcessStarted "native-cloudflared"
   }
+
+  Rotate-Logs
+
+  # 注册计划任务，系统重启后用户登录时自动启动
+  Register-NativeScheduledTask
 
   Write-Info "原生部署完成"
   Write-ModeFile "native"
@@ -853,16 +1118,18 @@ function Start-NativeServices {
     if ($Line -match "^EASYGATE_DEPLOY_MODE=(.+)") { $DeployMode = $matches[1] }
   }
   # 端口检查
-  # (basic check - skip for now, same as before)
+  Test-PortAvailable $TraefikPort "Traefik 端口"
   if (-not (Get-Command traefik -ErrorAction SilentlyContinue)) {
     Fail "缺少命令：traefik"
   }
   Start-NativeProcess "native-traefik" "traefik" @("--configFile", (Join-Path $EasyGateHome "native\traefik.yml"))
+  Test-ProcessStarted "native-traefik"
   if ($DeployMode -ne "local-only") {
     if (-not (Get-Command cloudflared -ErrorAction SilentlyContinue)) {
       Fail "缺少命令：cloudflared"
     }
     Start-NativeProcess "native-cloudflared" "cloudflared" @("tunnel", "--config", (Join-Path $EasyGateHome "cloudflared\config.native.yml"), "run")
+    Test-ProcessStarted "native-cloudflared"
   }
 }
 
@@ -942,6 +1209,8 @@ function Start-ServiceList {
 }
 
 function Invoke-Uninstall {
+  # 删除计划任务（阻止重启后自动启动）
+  Unregister-NativeScheduledTask
   # Stop native services (traefik + cloudflared)
   Stop-NativeServices
   # Stop demo services
@@ -953,6 +1222,14 @@ function Invoke-Uninstall {
   # Stop compose containers
   if ((Test-Path $ComposeFile) -and (Test-Path $ComposeEnv) -and (Get-Command docker -ErrorAction SilentlyContinue)) {
     try { Invoke-EasyGateCompose --profile demo down --remove-orphans } catch { }
+  }
+  # 从用户环境变量 PATH 中移除 EasyGate 目录
+  $InstallDir = Join-Path $EasyGateHome "bin"
+  $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+  if ($UserPath -like "*$InstallDir*") {
+    $NewPath = ($UserPath -split ';' | Where-Object { $_ -ne $InstallDir }) -join ';'
+    [Environment]::SetEnvironmentVariable("Path", $NewPath, "User")
+    Write-Info "已从用户环境变量 PATH 中移除 $InstallDir"
   }
   # Delete all local data
   # On Windows, processes may still hold file handles briefly after Stop-Process.
@@ -1013,11 +1290,19 @@ switch ($Command) {
             Write-Host "  $($Name.PadRight(15)) stopped"
           }
         }
+        # 显示计划任务状态
+        $TaskInfo = schtasks /query /tn "EasyGate" /fo LIST /v 2>$null
+        if ($LASTEXITCODE -eq 0) {
+          $TaskStatus = if ($TaskInfo -match "状态:\s+(\S+)") { $matches[1] } else { "?" }
+          Write-Host "  $("计划任务".PadRight(15)) $TaskStatus  (用户登录时自动启动)"
+        }
       }
       default { Fail "未找到已部署的服务，请先执行 easygate.ps1 deploy" }
     }
   }
   "logs" {
+    # 查看前先检查是否需要轮转
+    Rotate-Logs
     $Mode = Detect-Mode
     switch ($Mode) {
       "compose" { Invoke-EasyGateCompose logs -f traefik cloudflared }

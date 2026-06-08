@@ -47,11 +47,23 @@ easygate deploy --domain example.com
 
 ### 原生模式（无 Docker）
 
+适用于不想安装 Docker 的设备。自动下载 Traefik 二进制，配置写入 `~/.easygate/native/`（Linux/macOS）或 `%LOCALAPPDATA%\EasyGate\native\`（Windows），启动后台进程并注册系统服务，设备重启后自动恢复：
+
+- **Linux**：注册 systemd user service
+- **macOS**：注册 LaunchAgent
+- **Windows**：注册计划任务（用户登录时自动启动）
+
+**macOS / Linux：**
 ```sh
 easygate deploy --native --domain example.com
 ```
 
-适用于不想安装 Docker 的设备。自动下载 Traefik 二进制，配置写入 `~/.easygate/native/`，启动后台进程并注册系统服务（systemd/launchd），设备重启后自动恢复。
+**Windows：**
+```powershell
+easygate.ps1 deploy -Native -Domain example.com
+```
+
+> `install.ps1` 已自动将 EasyGate 目录添加到 PATH，新终端窗口可直接使用 `easygate.ps1` 命令。
 
 **额外选项：**
 
@@ -63,13 +75,19 @@ easygate deploy --native --domain example.com
 | `--no-install-cloudflared` | 不自动下载 cloudflared | 否 |
 | `--no-install-traefik` | 不自动下载 Traefik | 否 |
 
+**macOS / Linux：**
 ```sh
 easygate deploy --native --domain example.com --demo --local-only
 ```
 
+**Windows：**
+```powershell
+easygate.ps1 deploy -Native -Domain example.com -Demo -LocalOnly
+```
+
 ## 服务管理
 
-所有命令自动检测部署模式：
+所有命令自动检测部署模式。Windows 用户将 `easygate` 替换为 `easygate.ps1`：
 
 ```sh
 easygate start          # 启动服务
@@ -82,6 +100,12 @@ easygate version        # 显示版本号
 easygate home           # 显示运行时目录路径
 ```
 
+Windows 也可通过计划任务手动触发：
+```powershell
+schtasks /run /tn EasyGate        # 触发自动启动
+schtasks /end /tn EasyGate        # 停止任务进程
+```
+
 ## Demo 服务
 
 两种模式均支持，自动检测：
@@ -91,6 +115,8 @@ easygate demo start     # 启动 demo（api + test-api）
 easygate demo stop      # 停止并移除 demo
 easygate demo restart   # 重启 demo
 ```
+
+Windows 用户将 `easygate` 替换为 `easygate.ps1`，命令相同。
 
 部署后访问 `https://api.example.com` 和 `https://test-api.example.com`，预期看到 `traefik/whoami` 返回的 `Hostname:`、`IP:` 等信息。
 

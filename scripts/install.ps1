@@ -31,7 +31,6 @@ if (-not [string]::IsNullOrWhiteSpace($env:EASYGATE_LOCAL_CLI)) {
     Write-Error "[install] 找不到本地 CLI：$SourcePath"
     Write-Host "[install] 当前工作目录：$(Get-Location)"
     Write-Host "[install] github.workspace：$env:GITHUB_WORKSPACE"
-    Write-Host "[install] runner.temp：$env:RUNNER_TEMP"
     exit 1
   }
   try {
@@ -53,13 +52,30 @@ else {
   }
 }
 
+# ── PATH 自动配置 ──────────────────────────────────────────────────────
+
+# 当前会话立即生效
+$env:Path = "$InstallDir;$env:Path"
+Write-Host "[install] 已将 $InstallDir 添加到当前会话 PATH"
+
+# 写入用户环境变量（永久生效），仅在安装到默认路径时执行
+$DefaultHome = Join-Path $env:LOCALAPPDATA "EasyGate"
+if ($EasyGateHome -eq $DefaultHome) {
+  $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+  if ($UserPath -notlike "*$InstallDir*") {
+    $NewPath = "$InstallDir;$UserPath"
+    [Environment]::SetEnvironmentVariable("Path", $NewPath, "User")
+    Write-Host "[install] 已写入用户环境变量 PATH，新终端窗口自动生效"
+  }
+  else {
+    Write-Host "[install] $InstallDir 已在用户环境变量 PATH 中"
+  }
+}
+
+Write-Host ""
 Write-Host "[install] ✅ 安装完成"
 Write-Host "   CLI 路径：$Target"
 Write-Host "   运行时目录：$EasyGateHome"
-Write-Host ""
-Write-Host "   添加到 PATH 以便直接使用 easygate.ps1 命令："
-Write-Host "   `$env:Path = `"$InstallDir;`$env:Path`""
-Write-Host "   或系统设置 → 环境变量 → PATH 添加：$InstallDir"
 Write-Host ""
 
 if ($CommandArgs.Count -gt 0 -and $CommandArgs[0] -ne '') {
@@ -71,6 +87,5 @@ if ($CommandArgs.Count -gt 0 -and $CommandArgs[0] -ne '') {
 }
 
 Write-Host "   直接部署："
-Write-Host "   powershell -ExecutionPolicy Bypass -File `"$Target`" deploy -Domain example.com"
-Write-Host "   或先加入 PATH 后："
 Write-Host "   easygate.ps1 deploy -Domain example.com"
+Write-Host "   easygate.ps1 deploy -Native -Domain example.com（原生模式，无需 Docker）"
