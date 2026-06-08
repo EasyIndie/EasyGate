@@ -104,8 +104,8 @@ grep -q "cloudflared-windows-" scripts/easygate.ps1 || fail "easygate.ps1 缺少
 grep -q "cloudflared-linux-" scripts/easygate || fail "easygate CLI 缺少 Linux cloudflared 下载逻辑"
 grep -q "cloudflared-darwin-" scripts/easygate || fail "easygate CLI 缺少 macOS cloudflared 下载逻辑"
 # 回归检查：cloudflared 镜像版本已固定（非 :latest）
-grep -q "cloudflared:2025.2.1" scripts/easygate.ps1 || fail "easygate.ps1 cloudflared 版本未固定"
-grep -q "cloudflared:2025.2.1" docker-compose.yml || fail "docker-compose.yml cloudflared 版本未固定"
+grep -qE "cloudflared:[0-9]{4}\.[0-9]+" scripts/easygate.ps1 || fail "easygate.ps1 cloudflared 版本未固定"
+grep -qE "cloudflared:[0-9]{4}\.[0-9]+" docker-compose.yml || fail "docker-compose.yml cloudflared 版本未固定"
 # 回归检查：install.sh 不自依赖 lib.sh（curl | bash 模式无文件系统上下文）
 if grep -q "source.*lib.sh" scripts/install.sh; then
   fail "install.sh 不可依赖 lib.sh（curl | bash 管道模式无文件系统上下文）"
