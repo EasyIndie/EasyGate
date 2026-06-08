@@ -575,20 +575,13 @@ function Test-ValidatePortBehavior {
   Write-Info "验证 Validate-Port 拒绝无效端口号"
   New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir "run") | Out-Null
 
-  # 通过 dot-sourcing 直接调用 Validate-Port 函数
   $Tests = @(
     @{Port="0";      Desc="端口 0"},
     @{Port="99999";  Desc="端口 99999"},
     @{Port="abc";    Desc="非数字端口"}
   )
   foreach ($t in $Tests) {
-    $ScriptBlock = @"
-`$env:EASYGATE_HOME = '$RuntimeDir'
-`$ErrorActionPreference = 'Stop'
-. '$EasyGatePs'
-Validate-Port '$($t.Port)'
-"@
-    $Result = pwsh -NoProfile -Command $ScriptBlock 2>&1
+    $Result = pwsh -NoProfile -Command "`$env:EASYGATE_HOME='$RuntimeDir'; `$ErrorActionPreference='Stop'; . '$EasyGatePs'; Validate-Port '$($t.Port)'" 2>&1
     if ($LASTEXITCODE -eq 0) {
       Fail "Validate-Port 应拒绝 $($t.Desc)"
     }
@@ -605,26 +598,13 @@ function Test-ValidateDomainBehavior {
 
   $BadDomains = @("bad", "bad domain")
   foreach ($Domain in $BadDomains) {
-    $ScriptBlock = @"
-`$env:EASYGATE_HOME = '$RuntimeDir'
-`$ErrorActionPreference = 'Stop'
-. '$EasyGatePs'
-Validate-Domain '$Domain'
-"@
-    $Result = pwsh -NoProfile -Command $ScriptBlock 2>&1
+    $Result = pwsh -NoProfile -Command "`$env:EASYGATE_HOME='$RuntimeDir'; `$ErrorActionPreference='Stop'; . '$EasyGatePs'; Validate-Domain '$Domain'" 2>&1
     if ($LASTEXITCODE -eq 0) {
       Fail "Validate-Domain 应拒绝域名 '$Domain'"
     }
   }
 
-  # 有效域名应通过
-  $ScriptBlock = @"
-`$env:EASYGATE_HOME = '$RuntimeDir'
-`$ErrorActionPreference = 'Stop'
-. '$EasyGatePs'
-Validate-Domain 'my-app.example.test'
-"@
-  $Result = pwsh -NoProfile -Command $ScriptBlock 2>&1
+  $Result = pwsh -NoProfile -Command "`$env:EASYGATE_HOME='$RuntimeDir'; `$ErrorActionPreference='Stop'; . '$EasyGatePs'; Validate-Domain 'my-app.example.test'" 2>&1
   if ($LASTEXITCODE -ne 0) {
     Fail "Validate-Domain 应接受含连字符的域名"
   }
@@ -639,14 +619,7 @@ function Test-ServiceHelperInstallation {
   New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir "run") | Out-Null
   New-Item -ItemType Directory -Force -Path (Join-Path $RuntimeDir "lib") | Out-Null
 
-  $ScriptBlock = @"
-`$env:EASYGATE_HOME = '$RuntimeDir'
-`$ErrorActionPreference = 'Stop'
-. '$EasyGatePs'
-Install-ServiceHelper
-Write-Host (Test-Path (Join-Path '${RuntimeDir}' 'lib\service-helper.py'))
-"@
-  $Result = pwsh -NoProfile -Command $ScriptBlock 2>&1
+  $Result = pwsh -NoProfile -Command "`$env:EASYGATE_HOME='$RuntimeDir'; `$ErrorActionPreference='Stop'; . '$EasyGatePs'; Install-ServiceHelper; Write-Host (Test-Path (Join-Path '$RuntimeDir' 'lib\service-helper.py'))" 2>&1
   $LastLine = ($Result -split "`n" | Select-Object -Last 1).Trim()
   if ($LastLine -ne "True") {
     Fail "Install-ServiceHelper 未创建 service-helper.py. 输出: $Result"

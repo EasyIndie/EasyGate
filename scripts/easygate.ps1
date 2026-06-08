@@ -2,6 +2,9 @@
 # $args 捕获所有原始参数，由函数内部手动解析。
 $CommandArgs = @($args)
 
+# 被 dot-source 时跳过 dispatch，仅加载函数定义
+if ($MyInvocation.InvocationName -eq '.' -or $MyInvocation.Line -eq '') { return }
+
 # 手动解析子命令，避免 PS7 参数绑定问题
 if ($CommandArgs.Count -eq 0) {
   Show-Usage
