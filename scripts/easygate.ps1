@@ -2,18 +2,6 @@
 # $args 捕获所有原始参数，由函数内部手动解析。
 $CommandArgs = @($args)
 
-# 被 dot-source 时跳过 dispatch，仅加载函数定义和变量初始化
-if ($MyInvocation.InvocationName -eq '.') { return }
-
-# 手动解析子命令，避免 PS7 参数绑定问题
-if ($CommandArgs.Count -eq 0) {
-  Show-Usage
-  exit 0
-}
-$Command = $CommandArgs[0]
-$Rest = if ($CommandArgs.Count -gt 1) { $CommandArgs[1..($CommandArgs.Count - 1)] } else { @() }
-
-
 $ErrorActionPreference = "Stop"
 $Version = if ([string]::IsNullOrWhiteSpace($env:EASYGATE_VERSION)) { "dev" } else { $env:EASYGATE_VERSION }
 
@@ -1255,6 +1243,9 @@ function Invoke-Uninstall {
   }
   Write-Info "卸载完成。Cloudflare 侧资源如需删除，请使用 cloudflared CLI 或 Cloudflare Dashboard 手动处理。"
 }
+
+# 被 dot-source 时跳过 dispatch，仅加载函数定义和变量初始化
+if ($MyInvocation.InvocationName -eq '.') { return }
 
 # 手动解析子命令，避免 PS7 参数绑定问题
 if ($CommandArgs.Count -eq 0) {
