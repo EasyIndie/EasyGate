@@ -796,7 +796,7 @@ function Test-InstallPathConfiguration {
 `$env:EASYGATE_LOCAL_CLI = Join-Path "$Fixture" "scripts\easygate.ps1"
 Push-Location "$Fixture"
 try {
-  `$Output = & ".\scripts\install.ps1" 2>&1
+  `$Output = & ".\scripts\install.ps1" *>&1
   `$OutputText = `$Output -join "``n"
   if (`$OutputText -notmatch "PATH") {
     Write-Error "install.ps1 输出中缺少 PATH 关键字"
