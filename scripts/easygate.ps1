@@ -321,7 +321,8 @@ CiAgICAgICAgICAgIHByaW50KCLnlKjms5U6IHNlcnZpY2UtaGVscGVyLnB5IHJlbW92ZSA8cGF0
 aD4gPG5hbWU+IikKICAgICAgICAgICAgc3lzLmV4aXQoMSkKICAgICAgICByZW1vdmVfc2Vydmlj
 ZShzeXMuYXJndlsyXSwgc3lzLmFyZ3ZbM10pCiAgICBlbHNlOgogICAgICAgIHByaW50KGLmnI3n
 p7DnmoTlrZfnrKbvvJp7Y21kfe+8jOWPr+iDveWPr+aYr2FkZHxyZW1vdmV8bGlzdCIpCiAgICAg
-ICAgc3lzLmV4aXQoMSkK'@
+ICAgc3lzLmV4aXQoMSkK
+'@
   try {
     $Bytes = [System.Convert]::FromBase64String($Embedded)
     $Utf8 = [System.Text.Encoding]::UTF8
