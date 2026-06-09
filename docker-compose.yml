@@ -36,7 +36,7 @@ services:
           memory: 32M
 
   cloudflared:
-    image: cloudflare/cloudflared:2025.2.1
+    image: cloudflare/cloudflared:2026.5.2
     container_name: easygate-cloudflared
     restart: unless-stopped
     command: tunnel --config /etc/cloudflared/config.yml run
