@@ -82,6 +82,8 @@ easygate deploy --native --domain example.com --demo
 
 ## 日常使用
 
+安装后新终端自动启用 Tab 补全（`easygate <Tab>` 列出命令，`easygate deploy --<Tab>` 列出选项）。
+
 ```sh
 easygate start              # 启动服务
 easygate stop               # 停止服务（保留配置）

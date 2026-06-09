@@ -76,6 +76,41 @@ add_to_path() {
   info "已将 CLI 目录写入 ${rc_file}"
 }
 
+add_completion() {
+  local rc_file="$1"
+  local comp_dir="${EASYGATE_HOME}/completion"
+  local shell_name comp_file comp_line
+
+  shell_name="$(basename "${SHELL:-}" 2>/dev/null || true)"
+
+  # 检测 shell 类型，确定补全文件扩展名
+  case "$shell_name" in
+    bash) comp_file="easygate.bash" ;;
+    zsh)  comp_file="easygate.zsh" ;;
+    *)
+      # 探测 rc 文件名来推断：.zshrc → zsh, .bashrc/.bash_profile → bash
+      case "$rc_file" in
+        *zshrc) comp_file="easygate.zsh" ;;
+        *) comp_file="easygate.bash" ;;
+      esac
+      ;;
+  esac
+
+  # 写入补全脚本到文件
+  mkdir -p "$comp_dir"
+  "$TARGET" completion bash > "${comp_dir}/easygate.bash"
+  "$TARGET" completion zsh  > "${comp_dir}/easygate.zsh"
+
+  # 如果 rc 文件中已存在该 source 行则跳过
+  if grep -qs "easygate/completion/${comp_file}" "$rc_file" 2>/dev/null; then
+    return 0
+  fi
+
+  comp_line="source ${comp_dir}/${comp_file}"
+  printf '# EasyGate CLI completion\n%s\n' "$comp_line" >> "$rc_file"
+  info "已将补全配置写入 ${rc_file}"
+}
+
 # ── 主流程 ─────────────────────────────────────────────────────────────
 
 REPO="${EASYGATE_REPO:-EasyIndie/EasyGate}"
@@ -129,6 +164,7 @@ case "$(uname -s)" in
   Darwin|Linux)
     rc_file="$(detect_rc_file)"
     add_to_path "$rc_file"
+    add_completion "$rc_file"
     export PATH="${INSTALL_DIR}:$PATH"
     info "当前会话已生效，新终端窗口自动生效"
     ;;

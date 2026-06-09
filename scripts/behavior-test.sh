@@ -752,6 +752,33 @@ run_systemd_name_regression_test() {
   fi
 }
 
+run_completion_test() {
+  info "验证 completion 子命令输出有效的补全脚本"
+
+  local bash_out zsh_out
+  bash_out="$("${ROOT_DIR}/scripts/easygate" completion bash 2>&1)" || fail "completion bash 失败"
+  zsh_out="$("${ROOT_DIR}/scripts/easygate" completion zsh 2>&1)"   || fail "completion zsh 失败"
+
+  # bash 补全输出包含关键元素
+  if ! echo "$bash_out" | grep -q "_easygate"; then
+    fail "bash completion 未包含 _easygate 函数"
+  fi
+  if ! echo "$bash_out" | grep -q "complete -F _easygate"; then
+    fail "bash completion 未包含 complete -F 注册"
+  fi
+  if ! echo "$bash_out" | grep -q "deploy"; then
+    fail "bash completion 未包含 deploy 命令补全"
+  fi
+
+  # zsh 补全输出包含关键元素
+  if ! echo "$zsh_out" | grep -q "#compdef easygate"; then
+    fail "zsh completion 未包含 #compdef 标记"
+  fi
+  if ! echo "$zsh_out" | grep -q "_easygate"; then
+    fail "zsh completion 未包含 _easygate 函数"
+  fi
+}
+
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 run_deploy_behavior_test
@@ -775,5 +802,6 @@ run_local_only_test
 run_restart_test
 run_config_test
 run_systemd_name_regression_test
+run_completion_test
 
 info "行为测试通过"
