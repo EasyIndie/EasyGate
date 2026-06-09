@@ -19,7 +19,6 @@
 |------|-----|:---:|:---:|
 | macOS | Bash | ✅ | ✅ |
 | Linux (x86/ARM) | Bash | ✅ | ✅ |
-| Windows | PowerShell | ✅ | ✅ |
 
 ## 前置条件
 
@@ -38,7 +37,7 @@
 - [ ] Docker Compose 插件可用（`docker compose version`）
 
 **原生模式（不需要 Docker）：**
-- [ ] 仅需操作系统本身（macOS / Linux / Windows）
+- [ ] 仅需操作系统本身（macOS / Linux）
 
 ### 不需要的
 
@@ -65,13 +64,7 @@ dig @1.1.1.1 api.example.com A +short    # 确认解析生效
 curl -fsSL https://raw.githubusercontent.com/EasyIndie/EasyGate/main/scripts/install.sh | bash -s -- deploy --domain example.com --demo
 ```
 
-**Windows：**
-```powershell
-iwr -UseBasicParsing https://raw.githubusercontent.com/EasyIndie/EasyGate/main/scripts/install.ps1 -OutFile $env:TEMP\easygate-install.ps1
-powershell -ExecutionPolicy Bypass -File $env:TEMP\easygate-install.ps1 deploy -Domain example.com -Demo
-```
-
-安装后 CLI 在 `~/.easygate/bin/easygate`（Windows: `%LOCALAPPDATA%\EasyGate\bin\easygate.ps1`），自动写入 PATH，立即生效。部署后访问 `https://api.example.com` 验证 demo 服务。
+安装后 CLI 在 `~/.easygate/bin/easygate`，自动写入 PATH，立即生效。部署后访问 `https://api.example.com` 验证 demo 服务。
 
 ### 原生模式（无需 Docker）
 
@@ -86,21 +79,7 @@ curl -fsSL https://raw.githubusercontent.com/EasyIndie/EasyGate/main/scripts/ins
 easygate deploy --native --domain example.com --demo
 ```
 
-**Windows：**
-
-先安装 CLI：
-```powershell
-iwr -UseBasicParsing https://raw.githubusercontent.com/EasyIndie/EasyGate/main/scripts/install.ps1 -OutFile $env:TEMP\easygate-install.ps1
-powershell -ExecutionPolicy Bypass -File $env:TEMP\easygate-install.ps1
-```
-再部署：
-```powershell
-easygate.ps1 deploy -Native -Domain example.com -Demo
-```
-
-> `install.ps1` 已自动将 EasyGate 目录添加到 PATH，新终端窗口可直接使用 `easygate.ps1` 命令。
-
-原生模式会自动注册系统服务（Linux: systemd / macOS: launchd / Windows: 计划任务），设备重启后进程自动恢复。
+原生模式会自动注册系统服务（Linux: systemd / macOS: launchd），设备重启后进程自动恢复。
 
 **详细说明**：参见 [部署指南](docs/deployment.md) —— 涵盖 Docker / 原生部署、所有选项参数、接入自己的服务、域名约定、清理卸载。
 
@@ -125,8 +104,6 @@ easygate service remove my-app  # 删除服务
 easygate version            # 查看版本
 easygate uninstall          # 停止服务 + 删除全部数据 + 清理 PATH
 ```
-
-Windows 用户将 `easygate` 替换为 `easygate.ps1`，命令和选项相同。
 
 ## 参考文档
 

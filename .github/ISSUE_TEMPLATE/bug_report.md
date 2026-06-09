@@ -19,7 +19,7 @@ Steps to reproduce the behaviour:
 A clear and concise description of what you expected to happen.
 
 **Environment:**
-- OS: [e.g. macOS 14, Ubuntu 24.04, Windows 11]
+- OS: [e.g. macOS 14, Ubuntu 24.04]
 - EasyGate version: [output of `easygate version`]
 - Docker version: [output of `docker version`]
 - Deployment mode: [Docker Compose / Native]

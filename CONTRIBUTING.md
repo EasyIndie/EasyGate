@@ -29,8 +29,6 @@ make local-acceptance-native
 - **Shared utilities**: Place common functions in `scripts/lib.sh`.
   The standalone CLI (`scripts/easygate`) intentionally duplicates some
   functions — it must remain self-contained for installation.
-- **PowerShell**: Keep parity with the Bash scripts. Every Bash script
-  should have a corresponding `.ps1` version.
 - **Commit messages**: Use [Conventional Commits](https://www.conventionalcommits.org/):
   `feat:`, `fix:`, `docs:`, `test:`, `ci:`, `refactor:`, `chore:`.
 
@@ -38,7 +36,6 @@ make local-acceptance-native
 
 - [ ] `make test` passes.
 - [ ] `make behavior-test` passes.
-- [ ] Both Bash and PowerShell versions are updated for any script changes.
 - [ ] Documentation is updated if behaviour changes.
 
 ## Project structure
@@ -47,13 +44,12 @@ make local-acceptance-native
 scripts/
   lib.sh              ← Shared shell utilities
   easygate            ← Standalone CLI (self-contained)
-  easygate.ps1        ← Windows PowerShell CLI
-  cleanup.sh/.ps1     ← Docker Compose cleanup
-  install.sh/.ps1     ← One-liner installer
-  test.sh/.ps1        ← Static checks
-  behavior-test.sh/.ps1 ← Mock-based behaviour tests
-  local-acceptance.sh/.ps1 ← Docker routing tests
-  local-acceptance-native.sh/.ps1 ← Native routing tests
+  cleanup.sh          ← Docker Compose cleanup
+  install.sh          ← One-liner installer
+  test.sh             ← Static checks
+  behavior-test.sh    ← Mock-based behaviour tests
+  local-acceptance.sh ← Docker routing tests
+  local-acceptance-native.sh ← Native routing tests
   service-helper.py   ← Service YAML helper (embedded in CLI)
 docs/                 ← Detailed documentation
 .github/workflows/    ← CI and Release pipelines

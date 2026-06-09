@@ -15,7 +15,6 @@
 
 - [ ] `make test` passes
 - [ ] `make behavior-test` passes
-- [ ] Bash and PowerShell versions are both updated (if applicable)
 - [ ] Documentation is updated (if applicable)
 - [ ] Significant user-facing changes documented in commit message body
 

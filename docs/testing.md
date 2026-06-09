@@ -14,9 +14,9 @@ make lint               # ShellCheck（需安装 shellcheck）
 
 40+ 项断言覆盖：
 
-- 关键文件存在（`.sh` 和 `.ps1` 双版本）
+- 关键文件存在
 - 无旧项目名残留
-- Bash 语法（`bash -n`）+ PowerShell 语法（`PSParser.Tokenize`）
+- Bash 语法（`bash -n`）
 - `.env.example` 默认值
 - Traefik 网络命名（`easygate-proxy`）
 - **cloudflared 版本固定**：三个文件中均为 `2025.2.1`
@@ -52,10 +52,6 @@ Mock 二进制（docker、cloudflared、traefik）隔离真实环境，不需要
 | uninstall 清理 | 删除 PID 文件和运行时目录 |
 | ps 显示 demo | ps 输出包含 demo 服务状态 |
 
-### PowerShell 测试（7 个用例）
-
-覆盖部署、原生部署、清理、模式互斥、安装验证等核心路径。独立 CLI 测试在 Windows PS7 上暂跳过（已知 `$args` 兼容问题）。
-
 ## 本地路由验收
 
 ```sh
@@ -69,12 +65,11 @@ make local-acceptance-native    # 原生模式
 
 ## CI
 
-GitHub Actions 在 push、PR 和每周 cron 运行，三平台矩阵：
+GitHub Actions 在 push、PR 和每周 cron 运行，双平台矩阵：
 
 | 平台 | Shell | 严格 | 超时 | 备注 |
 |------|-------|------|------|------|
 | ubuntu-latest | Bash | ✅ | 15 min | Docker + 原生双验收 |
 | macos-latest | Bash | ❌ | 15 min | Docker + 原生双验收 |
-| windows-latest | PowerShell | ❌ | 15 min | 跳过 Docker 验收，仅原生验收 |
 
 Release 工作流：`git tag <semver>`（如 `0.0.1`）→ 打包 CLI + 校验和嵌入 + cosign 签名 + SPDX SBOM。

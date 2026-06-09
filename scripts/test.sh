@@ -33,20 +33,13 @@ require_file "traefik/traefik.yml"
 require_file "traefik/dynamic/localhost-services.yml"
 require_file "cloudflared/config.yml.example"
 require_file "scripts/test.sh"
-require_file "scripts/test.ps1"
 require_file "scripts/cleanup.sh"
-require_file "scripts/cleanup.ps1"
 require_file "scripts/local-acceptance.sh"
-require_file "scripts/local-acceptance.ps1"
 require_file "scripts/local-acceptance-native.sh"
-require_file "scripts/local-acceptance-native.ps1"
 require_file "scripts/behavior-test.sh"
-require_file "scripts/behavior-test.ps1"
 require_file "scripts/lib.sh"
 require_file "scripts/easygate"
-require_file "scripts/easygate.ps1"
 require_file "scripts/install.sh"
-require_file "scripts/install.ps1"
 
 info "检查旧项目名残留"
 if grep -R "[E]asyTLS\|[e]asytls\|[E]ASYTLS" \
@@ -95,16 +88,12 @@ info "检查 cloudflared 自动安装入口"
 grep -q "EASYGATE_CLOUDFLARED_HOME" scripts/lib.sh || fail "lib.sh 缺少 cloudflared home 覆盖入口"
 grep -q "EASYGATE_HOME" scripts/easygate || fail "easygate CLI 缺少 EASYGATE_HOME 运行时目录"
 grep -q "EASYGATE_LOCAL_CLI" scripts/install.sh || fail "install.sh 缺少本地 CLI 安装测试入口"
-grep -q "EASYGATE_HOME" scripts/easygate.ps1 || fail "easygate.ps1 缺少 EASYGATE_HOME 运行时目录"
-grep -q "EASYGATE_LOCAL_CLI" scripts/install.ps1 || fail "install.ps1 缺少本地 CLI 安装测试入口"
 grep -q "cloudflared-linux-" scripts/lib.sh || fail "lib.sh 缺少 Linux cloudflared 下载逻辑"
 grep -q "cloudflared-darwin-" scripts/lib.sh || fail "lib.sh 缺少 macOS cloudflared 下载逻辑"
-grep -q "cloudflared-windows-" scripts/easygate.ps1 || fail "easygate.ps1 缺少 Windows cloudflared 下载逻辑"
 # Also verify the standalone CLI has its own copies:
 grep -q "cloudflared-linux-" scripts/easygate || fail "easygate CLI 缺少 Linux cloudflared 下载逻辑"
 grep -q "cloudflared-darwin-" scripts/easygate || fail "easygate CLI 缺少 macOS cloudflared 下载逻辑"
 # 回归检查：cloudflared 镜像版本已固定（非 :latest）
-grep -qE "cloudflared:[0-9]{4}\.[0-9]+" scripts/easygate.ps1 || fail "easygate.ps1 cloudflared 版本未固定"
 grep -qE "cloudflared:[0-9]{4}\.[0-9]+" docker-compose.yml || fail "docker-compose.yml cloudflared 版本未固定"
 # 回归检查：install.sh 不自依赖 lib.sh（curl | bash 模式无文件系统上下文）
 if grep -q "source.*lib.sh" scripts/install.sh; then
@@ -117,14 +106,7 @@ fi
 info "检查原生模式入口"
 grep -q "traefik_v" scripts/lib.sh || fail "lib.sh 缺少 Traefik 下载逻辑"
 grep -q "traefik_v" scripts/easygate || fail "easygate CLI 缺少 Traefik 下载逻辑"
-grep -q "EASYGATE_CLI" scripts/local-acceptance-native.ps1 || fail "local-acceptance-native.ps1 缺少独立 CLI 覆盖入口"
 # 回归检查：安全加固 —— 生成的 compose 必须含 read_only 和 cap_drop
-# 回归检查：Cleanup-Compose 不使用 --profile（否则只停 demo）
-if grep -q "Cleanup-Compose" scripts/easygate.ps1; then
-  if grep -A10 "function Cleanup-Compose" scripts/easygate.ps1 | grep -q -- "--profile"; then
-    fail "easygate.ps1 Cleanup-Compose 不应包含 --profile"
-  fi
-fi
 
 info "检查 GitHub Actions Node 24 兼容配置"
 grep -q "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24" .github/workflows/ci.yml || fail "CI 缺少 Node 24 opt-in"
