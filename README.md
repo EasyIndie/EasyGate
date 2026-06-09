@@ -59,7 +59,6 @@ dig @1.1.1.1 api.example.com A +short    # 确认解析生效
 
 ### Docker Compose 模式（推荐）
 
-**macOS / Linux：**
 ```sh
 curl -fsSL https://raw.githubusercontent.com/EasyIndie/EasyGate/main/scripts/install.sh | bash -s -- deploy --domain example.com --demo
 ```
@@ -67,8 +66,6 @@ curl -fsSL https://raw.githubusercontent.com/EasyIndie/EasyGate/main/scripts/ins
 安装后 CLI 在 `~/.easygate/bin/easygate`，自动写入 PATH，立即生效。部署后访问 `https://api.example.com` 验证 demo 服务。
 
 ### 原生模式（无需 Docker）
-
-**macOS / Linux：**
 
 先安装 CLI：
 ```sh

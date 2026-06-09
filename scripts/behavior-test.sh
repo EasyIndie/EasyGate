@@ -652,6 +652,106 @@ run_ps_shows_all_services_test() {
   fi
 }
 
+run_local_only_test() {
+  local fixture home_dir runtime_dir bin_dir log_file
+  fixture="${TMP_DIR}/local-only-fixture"
+  home_dir="${TMP_DIR}/local-only-home"
+  runtime_dir="${TMP_DIR}/local-only-runtime"
+  bin_dir="${TMP_DIR}/local-only-bin"
+  log_file="${TMP_DIR}/local-only.log"
+
+  info "验证 --local-only 模式跳过 cloudflared（仅启动 Traefik）"
+  make_fixture "$fixture"
+  make_mock_bin "$bin_dir" "$log_file"
+  rm -f "${fixture}/cloudflared/config.yml" "${fixture}/cloudflared/easygate-home.json"
+
+  mkdir -p "${home_dir}/.cloudflared" "${runtime_dir}/run" "${runtime_dir}/logs"
+  touch "${home_dir}/.cloudflared/cert.pem"
+  echo '{"source":"local-only"}' > "${home_dir}/.cloudflared/0000.json"
+
+  EASYGATE_MOCK_LOG="$log_file" \
+  EASYGATE_CI=true \
+  EASYGATE_CLOUDFLARED_HOME="${home_dir}/.cloudflared" \
+  EASYGATE_HOME="$runtime_dir" \
+  PATH="${bin_dir}:$PATH" \
+    bash "${fixture}/scripts/easygate" deploy --native --domain "example.test" --demo --local-only --no-install-traefik || true
+
+  # 不应创建 cloudflared 配置
+  assert_missing "${runtime_dir}/cloudflared/config.native.yml"
+  # 不应调用 cloudflared tunnel 命令
+  if grep -Fq "cloudflared tunnel" "$log_file"; then
+    fail "--local-only 模式下不应调用 cloudflared tunnel"
+  fi
+  # 应包含 native/.env 且标记为 native 模式
+  assert_contains "${runtime_dir}/native/.env" "EASYGATE_DEPLOY_MODE=native"
+}
+
+run_restart_test() {
+  local fixture runtime_dir bin_dir log_file
+  fixture="${TMP_DIR}/restart-fixture"
+  runtime_dir="${TMP_DIR}/restart-runtime"
+  bin_dir="${TMP_DIR}/restart-bin"
+  log_file="${TMP_DIR}/restart.log"
+
+  info "验证 restart 子命令可执行（compose 模式）"
+  make_fixture "$fixture"
+  make_mock_bin "$bin_dir" "$log_file"
+
+  mkdir -p "${runtime_dir}/compose" "${runtime_dir}/cloudflared"
+  printf 'compose\n' > "${runtime_dir}/compose/docker-compose.yml"
+  printf 'env\n' > "${runtime_dir}/compose/.env"
+  printf 'compose\n' > "${runtime_dir}/.mode"
+
+  EASYGATE_HOME="$runtime_dir" PATH="${bin_dir}:$PATH" EASYGATE_MOCK_LOG="$log_file" \
+    bash "${fixture}/scripts/easygate" restart || true
+
+  # restart 应触发 docker compose restart
+  assert_contains "$log_file" "docker compose -p easygate"
+}
+
+run_config_test() {
+  local fixture runtime_dir bin_dir log_file
+  fixture="${TMP_DIR}/config-fixture"
+  runtime_dir="${TMP_DIR}/config-runtime"
+  bin_dir="${TMP_DIR}/config-bin"
+  log_file="${TMP_DIR}/config.log"
+
+  info "验证 config 子命令输出配置内容"
+  make_fixture "$fixture"
+  make_mock_bin "$bin_dir" "$log_file"
+
+  mkdir -p "${runtime_dir}/native" "${runtime_dir}/run" "${runtime_dir}/logs"
+  printf 'native\n' > "${runtime_dir}/.mode"
+  printf 'entryPoints:\n  web:\n    address: ":18080"\n' > "${runtime_dir}/native/traefik.yml"
+
+  local config_output
+  config_output="$(EASYGATE_HOME="$runtime_dir" PATH="${bin_dir}:$PATH" bash "${fixture}/scripts/easygate" config 2>&1)" || true
+  if ! echo "$config_output" | grep -q "entryPoints"; then
+    fail "config 输出应包含 Traefik 配置内容: $config_output"
+  fi
+}
+
+run_systemd_name_regression_test() {
+  info "验证 systemd 服务名一致性（native-traefik / native-cloudflared）"
+
+  # 检查 deploy_native() 中 register_systemd 调用用的名字
+  if ! grep -q 'register_systemd "native-traefik"' "${ROOT_DIR}/scripts/easygate"; then
+    fail "deploy_native 中未找到 register_systemd native-traefik"
+  fi
+  if ! grep -q 'register_systemd "native-cloudflared"' "${ROOT_DIR}/scripts/easygate"; then
+    fail "deploy_native 中未找到 register_systemd native-cloudflared"
+  fi
+
+  # 检查 start_native_services / stop_native_services / unregister_native_services
+  # 使用的服务名与 register 创建的一致
+  if grep -q 'easygate-traefik\.service' "${ROOT_DIR}/scripts/easygate"; then
+    fail "scripts/easygate 中仍有 easygate-traefik.service 引用，应为 native-traefik.service"
+  fi
+  if grep -q 'easygate-cloudflared\.service' "${ROOT_DIR}/scripts/easygate"; then
+    fail "scripts/easygate 中仍有 easygate-cloudflared.service 引用，应为 native-cloudflared.service"
+  fi
+}
+
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 run_deploy_behavior_test
@@ -671,5 +771,9 @@ run_cloudflared_config_test
 run_native_cloudflared_config_test
 run_uninstall_cleanup_test
 run_ps_shows_all_services_test
+run_local_only_test
+run_restart_test
+run_config_test
+run_systemd_name_regression_test
 
 info "行为测试通过"

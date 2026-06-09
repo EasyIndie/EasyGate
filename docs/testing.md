@@ -19,7 +19,7 @@ make lint               # ShellCheck（需安装 shellcheck）
 - Bash 语法（`bash -n`）
 - `.env.example` 默认值
 - Traefik 网络命名（`easygate-proxy`）
-- **cloudflared 版本固定**：三个文件中均为 `2025.2.1`
+- **cloudflared 版本固定**：docker-compose.yml 与 CLI 模板中均为 `2026.5.2`
 - **install.sh 自包含**：禁止 `source lib.sh` 或 `BASH_SOURCE`
 - **安全加固**：CLI 生成的 compose 模板含 `read_only` + `cap_drop`，且 `Cleanup-Compose` 不含 `--profile`
 - **compose down 含 `--profile demo`**（确保 demo 容器也清理）

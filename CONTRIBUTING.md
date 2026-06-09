@@ -6,7 +6,7 @@ Thanks for your interest in contributing!
 
 1. Fork the repository and clone it locally.
 2. Read through the [README.md](README.md) to understand the project architecture.
-3. Run `make test` to ensure your environment is ready.
+3. Run `make test` to ensure your environment is ready. (Optional: install `shellcheck` for Bash linting via `make lint`.)
 
 ## Development workflow
 

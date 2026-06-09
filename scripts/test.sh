@@ -95,6 +95,12 @@ grep -q "cloudflared-linux-" scripts/easygate || fail "easygate CLI 缺少 Linux
 grep -q "cloudflared-darwin-" scripts/easygate || fail "easygate CLI 缺少 macOS cloudflared 下载逻辑"
 # 回归检查：cloudflared 镜像版本已固定（非 :latest）
 grep -qE "cloudflared:[0-9]{4}\.[0-9]+" docker-compose.yml || fail "docker-compose.yml cloudflared 版本未固定"
+# 回归检查：CLI 内嵌的 cloudflared 镜像版本与 docker-compose.yml 一致
+_yml_version="$(grep -oE 'cloudflare/cloudflared:[0-9]{4}\.[0-9]+\.[0-9]+' docker-compose.yml | head -1 | cut -d: -f2)"
+_cli_version="$(grep -oE 'cloudflare/cloudflared:[0-9]{4}\.[0-9]+\.[0-9]+' scripts/easygate | head -1 | cut -d: -f2)"
+if [[ -n "$_yml_version" && -n "$_cli_version" && "$_yml_version" != "$_cli_version" ]]; then
+  fail "CLI 内嵌 cloudflared 版本 ${_cli_version} 与 docker-compose.yml ${_yml_version} 不一致"
+fi
 # 回归检查：install.sh 不自依赖 lib.sh（curl | bash 模式无文件系统上下文）
 if grep -q "source.*lib.sh" scripts/install.sh; then
   fail "install.sh 不可依赖 lib.sh（curl | bash 管道模式无文件系统上下文）"

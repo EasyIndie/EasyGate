@@ -470,7 +470,7 @@ write_compose_file() {
   local base_domain="$1"
   local dashboard_host="$2"
   local traefik_http_port="$3"
-  local cloudflared_image="${EASYGATE_CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2025.2.1}"
+  local cloudflared_image="${EASYGATE_CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2026.5.2}"
 
   cat > "$COMPOSE_FILE" <<EOF_COMPOSE
 services:
@@ -1424,12 +1424,12 @@ start_native_services() {
       fi
       ;;
     Linux)
-      local traefik_unit="${HOME}/.config/systemd/user/easygate-traefik.service"
+      local traefik_unit="${HOME}/.config/systemd/user/native-traefik.service"
       if [[ -f "$traefik_unit" ]] && command -v systemctl >/dev/null 2>&1; then
         info "通过 systemd 启动服务"
-        systemctl --user start "easygate-traefik.service" >/dev/null 2>&1 || true
+        systemctl --user start "native-traefik.service" >/dev/null 2>&1 || true
         if [[ "${EASYGATE_DEPLOY_MODE:-}" != "local-only" ]]; then
-          systemctl --user start "easygate-cloudflared.service" >/dev/null 2>&1 || true
+          systemctl --user start "native-cloudflared.service" >/dev/null 2>&1 || true
         fi
         return
       fi
@@ -1460,8 +1460,8 @@ stop_native_services() {
       ;;
     Linux)
       if command -v systemctl >/dev/null 2>&1; then
-        systemctl --user stop "easygate-traefik.service" "easygate-cloudflared.service" >/dev/null 2>&1 || true
-        systemctl --user reset-failed "easygate-traefik.service" "easygate-cloudflared.service" >/dev/null 2>&1 || true
+        systemctl --user stop "native-traefik.service" "native-cloudflared.service" >/dev/null 2>&1 || true
+        systemctl --user reset-failed "native-traefik.service" "native-cloudflared.service" >/dev/null 2>&1 || true
       fi
       ;;
   esac
@@ -1502,10 +1502,10 @@ stop_native_demo() {
 unregister_native_services() {
   case "$(uname -s)" in
     Linux)
-      systemctl --user stop "easygate-traefik.service" "easygate-cloudflared.service" "easygate-logrotate.timer" >/dev/null 2>&1 || true
-      systemctl --user disable "easygate-traefik.service" "easygate-cloudflared.service" "easygate-logrotate.timer" >/dev/null 2>&1 || true
-      rm -f "${HOME}/.config/systemd/user/easygate-traefik.service" \
-            "${HOME}/.config/systemd/user/easygate-cloudflared.service" \
+      systemctl --user stop "native-traefik.service" "native-cloudflared.service" "easygate-logrotate.timer" >/dev/null 2>&1 || true
+      systemctl --user disable "native-traefik.service" "native-cloudflared.service" "easygate-logrotate.timer" >/dev/null 2>&1 || true
+      rm -f "${HOME}/.config/systemd/user/native-traefik.service" \
+            "${HOME}/.config/systemd/user/native-cloudflared.service" \
             "${HOME}/.config/systemd/user/easygate-logrotate.service" \
             "${HOME}/.config/systemd/user/easygate-logrotate.timer"
       systemctl --user daemon-reload >/dev/null 2>&1 || true
@@ -1612,10 +1612,10 @@ show_status() {
         Linux)
           if command -v systemctl >/dev/null 2>&1; then
             showed_system=true
-            for svc in easygate-traefik easygate-cloudflared; do
+            for svc in native-traefik native-cloudflared; do
               local active
               active="$(systemctl --user is-active "${svc}.service" 2>/dev/null)" || true
-              local name="${svc#easygate-}"
+              local name="${svc#native-}"
               if [[ "$active" == "active" ]]; then
                 printf '  %-15s running\n' "$name"
               else
@@ -1688,11 +1688,11 @@ case "$cmd" in
         case "$(uname -s)" in
           Linux)
             # systemd 管理的服务日志在 journald 中，不在文件里
-            if command -v journalctl >/dev/null 2>&1 && systemctl --user is-active easygate-traefik.service >/dev/null 2>&1; then
-              journalctl --user -u easygate-traefik.service -u easygate-cloudflared.service -f "$@"
+            if command -v journalctl >/dev/null 2>&1 && systemctl --user is-active native-traefik.service >/dev/null 2>&1; then
+              journalctl --user -u native-traefik.service -u native-cloudflared.service -f "$@"
             else
               tail -f "${EASYGATE_HOME}/logs/native-traefik.log" "${EASYGATE_HOME}/logs/native-cloudflared.log" "$@" 2>/dev/null || {
-                error "日志文件不存在。若使用 systemd，请用 journalctl --user -u easygate-traefik -f 查看"
+                error "日志文件不存在。若使用 systemd，请用 journalctl --user -u native-traefik -f 查看"
                 exit 1
               }
             fi
