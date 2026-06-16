@@ -101,8 +101,10 @@ easygate service add \      # 添加自定义服务
 easygate service list       # 列出所有服务
 easygate service remove my-app  # 删除服务
 easygate version            # 查看版本
-easygate uninstall          # 停止服务 + 删除全部数据 + 清理 PATH
+easygate uninstall          # 停止服务 + 备份自定义服务 + 删除运行时目录 + 清理 PATH
 ```
+
+卸载前会自动备份自定义服务配置到 `~/.easygate.uninstall-backup/`。重新安装后执行 `easygate deploy`，CLI 会检测到备份并询问是否恢复，确认后自定义路由即可恢复。跳过恢复可传 `--no-restore` 参数。
 
 ## 参考文档
 

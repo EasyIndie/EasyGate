@@ -46,6 +46,7 @@ easygate deploy --domain example.com
 | `--demo` | 部署后启动 demo 服务 | 否 |
 | `--skip-route` | 不自动创建 DNS 路由 | 否 |
 | `--no-install-cloudflared` | 不自动下载 cloudflared | 否 |
+| `--no-restore` | 不恢复之前备份的自定义服务 | 否 |
 
 ### 原生模式（无 Docker）
 
@@ -67,6 +68,7 @@ easygate deploy --native --domain example.com
 | `--local-only` | 仅启动 Traefik，不启动 cloudflared | 否 |
 | `--no-install-cloudflared` | 不自动下载 cloudflared | 否 |
 | `--no-install-traefik` | 不自动下载 Traefik | 否 |
+| `--no-restore` | 不恢复之前备份的自定义服务 | 否 |
 
 ```sh
 easygate deploy --native --domain example.com --demo --local-only
@@ -139,7 +141,10 @@ networks:
 
 ### 非 Docker 服务（手动配置）
 
-编辑 `~/.easygate/traefik/dynamic/localhost-services.yml`（Docker 模式）或 `~/.easygate/native/dynamic/services.yml`（原生模式）：
+推荐使用 `easygate service add`，配置即时生效。也可直接编辑 YAML 文件：
+
+- Docker 模式：`~/.easygate/traefik/dynamic/localhost-services.yml`
+- 原生模式：`~/.easygate/native/dynamic/services.yml`
 
 ```yaml
 http:
@@ -157,6 +162,8 @@ http:
 
 Traefik 监听配置目录并自动热重载。
 
+> **注意**：手动编辑的文件在卸载时会被备份到 `~/.easygate.uninstall-backup/`，重新部署后可通过 `easygate deploy` 恢复。
+
 ## 域名约定
 
 Cloudflare Free 的 Universal SSL 通配证书只覆盖根域名和一级子域名：
@@ -170,8 +177,10 @@ Cloudflare Free 的 Universal SSL 通配证书只覆盖根域名和一级子域�
 ## 清理
 
 ```sh
-easygate uninstall         # 停止服务 + 删除全部数据 + 清理 shell PATH
+easygate uninstall         # 停止服务 + 备份自定义服务 + 删除运行时目录 + 清理 PATH
 ```
+
+卸载前会自动备份自定义服务配置到 `~/.easygate.uninstall-backup/`。重新安装后执行 `easygate deploy`，CLI 会检测到备份并询问是否恢复，可传 `--no-restore` 跳过。
 
 清理不会删除 Cloudflare 上的 DNS 记录或 Tunnel——需用 `cloudflared` CLI 或 Dashboard 手动处理。
 
@@ -188,9 +197,19 @@ easygate uninstall         # 停止服务 + 删除全部数据 + 清理 shell PA
 ├── compose/          运行时 Docker Compose 配置
 ├── native/           原生模式 Traefik 配置与动态服务
 ├── cloudflared/     Tunnel 凭据和配置
+├── traefik/          Docker 模式 Traefik 配置（含动态服务 YAML）
 ├── run/              PID 文件
 ├── logs/             日志（自动轮转，单文件上限 10MB）
-└── traefik/          Docker 模式 Traefik 配置
+└── tmp/              临时下载缓存（cloudflared、traefik 等）
+```
+
+卸载时自定义服务 YAML 会自动备份到 `~/.easygate.uninstall-backup/`（位于 EASYGATE_HOME 之外）：
+
+```
+~/.easygate.uninstall-backup/
+├── services.yml      上次卸载时备份的自定义服务路由配置
+├── compose.env       备份的 Docker 模式 .env（供参考）
+└── native.env        备份的原生模式 .env（供参考）
 ```
 
 ## 安全加固
