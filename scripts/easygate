@@ -471,7 +471,7 @@ write_compose_file() {
   local base_domain="$1"
   local dashboard_host="$2"
   local traefik_http_port="$3"
-  local cloudflared_image="${EASYGATE_CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2026.5.2}"
+  local cloudflared_image="${EASYGATE_CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2026.6.0}"
 
   cat > "$COMPOSE_FILE" <<EOF_COMPOSE
 services:
