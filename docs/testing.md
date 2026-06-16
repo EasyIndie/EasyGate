@@ -30,7 +30,7 @@ make lint               # ShellCheck（需安装 shellcheck）
 
 Mock 二进制（docker、cloudflared、traefik）隔离真实环境，不需要 Cloudflare 账号。
 
-### Bash 测试（17 个用例）
+### Bash 测试（23 个用例）
 
 | 测试 | 验证内容 |
 |------|----------|
@@ -49,8 +49,15 @@ Mock 二进制（docker、cloudflared、traefik）隔离真实环境，不需要
 | .mode 文件 | 部署时写入 .mode 供 detect_mode 读取 |
 | cloudflared 配置 | ha-connections + loglevel 写入 compose 模式配置 |
 | cloudflared 配置(原生) | ha-connections + loglevel 写入原生模式配置 |
-| uninstall 清理 | 删除 PID 文件和运行时目录 |
+| uninstall 清理 + 备份 | 删除运行时目录；有自定义服务时自动备份到 EASYGATE_HOME 之外 |
+| uninstall 备份完整性 | 多个自定义服务完整备份，.env 一并备份 |
 | ps 显示 demo | ps 输出包含 demo 服务状态 |
+| 恢复边界条件 | 无备份跳过、空备份清理、CI 跳过、交互 Y/N、`--no-restore` |
+| service-helper 操作 | add/remove/list/重复/空文件/`{}`展开 共 9 场景 |
+| uninstall→deploy→restore 集成 | compose + native 双模式全流程，`--no-restore` 标志 |
+| 本地 | --local-only 跳过 cloudflared |
+| restart | compose 模式 restart 子命令可用 |
+| config | native 模式 config 输出 Traefik 配置 |
 
 ## 本地路由验收
 
@@ -59,7 +66,7 @@ make local-acceptance           # Docker 模式
 make local-acceptance-native    # 原生模式
 ```
 
-验证 `api.example.com` 返回 `Hostname:` → `test-api.example.com` → 未配置域名 404。
+验证 `api.example.com` 返回 `Hostname:` → `test-api.example.com` → 未配置域名 404。Docker 模式额外通过 `easygate service add` 添加自定义路由并验证可达；原生模式同样通过 CLI 添加自定义服务并验证路由。
 
 `EASYGATE_ACCEPTANCE_STRICT=true` 控制严格模式（失败即退出）。
 

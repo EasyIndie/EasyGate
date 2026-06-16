@@ -111,4 +111,38 @@ info "验证未配置域名返回 404"
 status="$(curl -sS -o /dev/null -w '%{http_code}' -H "Host: missing.example.com" "http://127.0.0.1:${TRAEFIK_HTTP_PORT}")"
 [[ "$status" == "404" ]] || skip_or_fail "missing.example.com 预期 404，实际 ${status}"
 
+info "验证自定义服务路由（file provider + service-helper.py）"
+# traefik/traefik.yml 已配置 file provider（directory: /etc/traefik/dynamic, watch: true）
+# 但 localhost-services.yml 是纯注释模板，service-helper.py 需要标准的 YAML 结构
+# 先写入空的 YAML 结构
+printf 'http:\n  routers: {}\n  services: {}\n' > "traefik/dynamic/localhost-services.yml"
+
+# 重启 Traefik 加载新的空配置
+if ! "${COMPOSE[@]}" up -d traefik; then
+  skip_or_fail "重启 Traefik 加载空配置失败"
+fi
+sleep 2
+
+# 通过 service-helper.py 添加自定义服务
+python3 scripts/service-helper.py add \
+  "traefik/dynamic/localhost-services.yml" \
+  "acceptance-test" \
+  "custom.docker.example.com" \
+  "http://demo-api:80" || skip_or_fail "添加自定义服务失败"
+
+sleep 2  # 等待 Traefik 热加载 file provider 配置
+
+# 验证自定义路由
+request "custom.docker.example.com" | grep -q "Hostname:" \
+  || skip_or_fail "custom.docker.example.com 未返回响应"
+
+# 验证 service list
+python3 scripts/service-helper.py list "traefik/dynamic/localhost-services.yml" | grep -q "acceptance-test" \
+  || fail "service list 未包含 acceptance-test"
+
+info "自定义服务路由验收通过"
+
+# 清理：恢复 localhost-services.yml 为纯注释模板
+git checkout -- "traefik/dynamic/localhost-services.yml" 2>/dev/null || true
+
 info "本机路由验收通过"

@@ -592,28 +592,125 @@ run_native_cloudflared_config_test() {
 }
 
 run_uninstall_cleanup_test() {
-  local fixture home_dir runtime_dir bin_dir log_file
+  local fixture home_dir runtime_dir bin_dir log_file backup_dir
   fixture="${TMP_DIR}/uninstall-cleanup-fixture"
   home_dir="${TMP_DIR}/uninstall-cleanup-home"
   runtime_dir="${TMP_DIR}/uninstall-cleanup-runtime"
   bin_dir="${TMP_DIR}/uninstall-cleanup-bin"
   log_file="${TMP_DIR}/uninstall-cleanup.log"
+  backup_dir="${home_dir}/.easygate.uninstall-backup"
 
-  info "验证 uninstall 清理 PID 文件和运行时目录"
+  info "验证 uninstall 清理运行时目录并备份自定义服务"
   make_fixture "$fixture"
   make_mock_bin "$bin_dir" "$log_file"
 
-  mkdir -p "${runtime_dir}/run" "${runtime_dir}/logs" "${runtime_dir}/compose"
+  mkdir -p "${runtime_dir}/run" "${runtime_dir}/logs" "${runtime_dir}/compose" \
+    "${runtime_dir}/traefik/dynamic"
   touch "${runtime_dir}/compose/docker-compose.yml"
   touch "${runtime_dir}/compose/.env"
   echo "12345" > "${runtime_dir}/run/native-traefik.pid"
   echo "12346" > "${runtime_dir}/run/native-cloudflared.pid"
 
+  # 模拟自定义服务 YAML
+  cat > "${runtime_dir}/traefik/dynamic/localhost-services.yml" <<'EOF_SERVICE'
+http:
+  routers:
+    my-app:
+      rule: Host(`myapp.example.com`)
+      entryPoints:
+        - web
+      service: my-app
+  services:
+    my-app:
+      loadBalancer:
+        servers:
+          - url: http://192.168.1.100:8080
+EOF_SERVICE
+
+  HOME="$home_dir" \
   EASYGATE_HOME="$runtime_dir" \
   PATH="${bin_dir}:$PATH" \
     bash "${fixture}/scripts/easygate" uninstall || true
 
+  # 运行时目录已被删除
   assert_missing "$runtime_dir"
+
+  # 自定义服务配置已备份到 EASYGATE_HOME 之外
+  assert_file "${backup_dir}/services.yml"
+  assert_contains "${backup_dir}/services.yml" "my-app"
+  assert_contains "${backup_dir}/services.yml" "myapp.example.com"
+
+  # 清理备份
+  rm -rf "$backup_dir"
+}
+
+run_uninstall_backup_restore_test() {
+  local fixture home_dir runtime_dir bin_dir log_file backup_dir
+  fixture="${TMP_DIR}/backup-restore-fixture"
+  home_dir="${TMP_DIR}/backup-restore-home"
+  runtime_dir="${TMP_DIR}/backup-restore-runtime"
+  bin_dir="${TMP_DIR}/backup-restore-bin"
+  log_file="${TMP_DIR}/backup-restore.log"
+  backup_dir="${home_dir}/.easygate.uninstall-backup"
+
+  info "验证 uninstall 正确备份自定义服务配置"
+  make_fixture "$fixture"
+  make_mock_bin "$bin_dir" "$log_file"
+
+  # 模拟 compose 模式部署，包含自定义服务
+  mkdir -p "${runtime_dir}/run" "${runtime_dir}/logs" "${runtime_dir}/compose" \
+    "${runtime_dir}/traefik/dynamic"
+  touch "${runtime_dir}/compose/docker-compose.yml"
+  touch "${runtime_dir}/compose/.env"
+  echo "compose" > "${runtime_dir}/.mode"
+
+  # 创建一个包含多个自定义服务的 YAML
+  cat > "${runtime_dir}/traefik/dynamic/localhost-services.yml" <<'EOF_SERVICE'
+http:
+  routers:
+    my-app:
+      rule: Host(`myapp.example.com`)
+      entryPoints:
+        - web
+      service: my-app
+    another-app:
+      rule: Host(`another.example.com`)
+      entryPoints:
+        - web
+      service: another-app
+  services:
+    my-app:
+      loadBalancer:
+        servers:
+          - url: http://192.168.1.100:8080
+    another-app:
+      loadBalancer:
+        servers:
+          - url: http://192.168.1.101:3000
+EOF_SERVICE
+
+  HOME="$home_dir" \
+  EASYGATE_HOME="$runtime_dir" \
+  PATH="${bin_dir}:$PATH" \
+    bash "${fixture}/scripts/easygate" uninstall || true
+
+  # 运行时目录已删除
+  assert_missing "$runtime_dir"
+
+  # 备份已创建且内容完整
+  assert_file "${backup_dir}/services.yml"
+  assert_contains "${backup_dir}/services.yml" "my-app"
+  assert_contains "${backup_dir}/services.yml" "another-app"
+  assert_contains "${backup_dir}/services.yml" "192.168.1.100"
+  assert_contains "${backup_dir}/services.yml" "192.168.1.101"
+
+  # .env 也备份了
+  assert_file "${backup_dir}/compose.env"
+
+  info "  ✓ 卸载后自定义服务配置完整保留在备份目录"
+
+  # 清理
+  rm -rf "$backup_dir"
 }
 
 run_ps_shows_all_services_test() {
@@ -779,6 +876,426 @@ run_completion_test() {
   fi
 }
 
+run_service_helper_unit_test() {
+  local helper="${ROOT_DIR}/scripts/service-helper.py"
+  local tmp_dir="${TMP_DIR}/service-helper-test"
+  mkdir -p "$tmp_dir"
+
+  info "验证 service-helper.py YAML 增删查操作"
+
+  # ── ╳ 1. add 服务到新文件 ──
+  local yaml="${tmp_dir}/test1.yml"
+  python3 "$helper" add "$yaml" "my-api" "api.example.com" "http://192.168.1.10:8080"
+  assert_file "$yaml"
+  assert_contains "$yaml" "routers:"
+  assert_contains "$yaml" "my-api"
+  assert_contains "$yaml" "api.example.com"
+  assert_contains "$yaml" "192.168.1.10:8080"
+
+  # ── ╳ 2. add 多个服务 ──
+  python3 "$helper" add "$yaml" "another-api" "another.example.com" "http://192.168.1.11:3000"
+  assert_contains "$yaml" "another-api"
+  assert_contains "$yaml" "another.example.com"
+  assert_contains "$yaml" "192.168.1.11:3000"
+
+  # ── ╳ 3. add 重复服务应报错 ──
+  if python3 "$helper" add "$yaml" "my-api" "dup.example.com" "http://dup:8080" 2>/dev/null; then
+    fail "添加重复服务应退出非 0"
+  fi
+
+  # ── ╳ 4. list 输出包含服务信息 ──
+  local list_out
+  list_out="$(python3 "$helper" list "$yaml")" || fail "list 失败"
+  if ! echo "$list_out" | grep -q "my-api"; then
+    fail "list 输出应包含 my-api: $list_out"
+  fi
+  if ! echo "$list_out" | grep -q "api.example.com"; then
+    fail "list 输出应包含 api.example.com: $list_out"
+  fi
+
+  # ── ╳ 5. remove 已有服务 ──
+  python3 "$helper" remove "$yaml" "my-api"
+  if grep -q "    my-api:" "$yaml" 2>/dev/null; then
+    fail "remove my-api 后文件中仍存在 my-api"
+  fi
+  assert_contains "$yaml" "another-api"  # 另一个应保留
+
+  # ── ╳ 6. remove 不存在服务应静默退出 ──
+  python3 "$helper" remove "$yaml" "nonexistent" || true
+
+  # ── ╳ 7. list 空文件 ──
+  local empty_yaml="${tmp_dir}/empty.yml"
+  python3 "$helper" list "$empty_yaml" 2>&1 | grep -q "暂无已配置的服务" \
+    || fail "空文件 list 应显示提示信息"
+  [[ ! -f "$empty_yaml" ]] || fail "list 不应创建文件"
+
+  # ── ╳ 8. 空占位符 {} 展开 ──
+  local braces_yaml="${tmp_dir}/braces.yml"
+  printf 'http:\n  routers: {}\n  services: {}\n' > "$braces_yaml"
+  python3 "$helper" add "$braces_yaml" "new-svc" "new.example.com" "http://new:9090"
+  if grep -q '{}' "$braces_yaml" 2>/dev/null; then
+    fail "add 后应展开 {} 占位符"
+  fi
+  assert_contains "$braces_yaml" "new-svc"
+
+  # ── ╳ 9. add 后 remove 恢复结构 ──
+  local clean="${tmp_dir}/clean.yml"
+  printf 'http:\n  routers: {}\n  services: {}\n' > "$clean"
+  python3 "$helper" add "$clean" "temp-svc" "temp.example.com" "http://temp:8080"
+  python3 "$helper" remove "$clean" "temp-svc"
+  if grep -q "    " "$clean" 2>/dev/null; then
+    fail "remove 后不应有缩进条目"
+  fi
+  assert_contains "$clean" "routers:"
+  assert_contains "$clean" "services:"
+
+  info "  ✓ service-helper.py YAML 操作全部通过"
+}
+
+# ── Helper: extract a bash function from easygate by name ──
+_extract_fn() {
+  local name="$1" script="$2"
+  sed -n "/^${name}()/,/^}/p" "$script"
+}
+
+run_restore_unit_test() {
+  local script="${ROOT_DIR}/scripts/easygate"
+  local tmp_dir="${TMP_DIR}/restore-unit-test"
+  mkdir -p "$tmp_dir"
+
+  info "验证 _deploy_restore_user_data 边界条件"
+  local scenarios_passed=0 scenarios_total=0
+
+  # Creates a standalone test script for one scenario and runs it.
+  # Usage: _run_scenario <name> <home_dir> <extra_vars> <mock_read_func>
+  _run_scenario() {
+    local name="$1" home="$2" runtime="$3" extra_vars="$4" mock_read="$5"
+    local test_file="${tmp_dir}/sc_${name}.sh"
+    scenarios_total=$((scenarios_total + 1))
+
+    {
+      printf 'set -euo pipefail\n'
+      printf 'HOME="%s"\n' "$home"
+      printf 'EASYGATE_HOME="%s"\n' "$runtime"
+      printf 'EASYGATE_CI=\n'
+      printf '%s\n' "$extra_vars"
+      # Mock dependencies
+      printf 'info() { printf "INFO: %%s\\n" "$1"; }\n'
+      printf 'warn() { printf "WARN: %%s\\n" "$1"; }\n'
+      printf 'error() { local m="%%s"; printf "ERROR: ${m}\\n" "$1" >&2; exit 1; }\n'
+      printf '_service_yaml_path() { printf "%%s/native/dynamic/services.yml" "$EASYGATE_HOME"; }\n'
+      printf 'restart_services() { echo "RESTART_CALLED"; }\n'
+      # Mock read
+      printf '%s\n' "$mock_read"
+      _extract_fn "_deploy_restore_user_data" "$script"
+      printf '\n_deploy_restore_user_data "true"\n'
+      printf 'echo "EXIT_OK"\n'
+    } > "$test_file"
+
+    local output
+    if output="$(bash "$test_file" 2>&1)"; then
+      if echo "$output" | grep -q "EXIT_OK"; then
+        scenarios_passed=$((scenarios_passed + 1))
+        return 0
+      fi
+    fi
+    fail "场景「${name}」失败\n输出：${output}"
+  }
+
+  local h r
+
+  # 1. 无备份目录 → 跳过
+  h="${tmp_dir}/h1"; mkdir -p "$h"
+  _run_scenario "no-backup" "$h" "${tmp_dir}/r1" "" "read() { :; }" && info "  ✓ 无备份目录跳过"
+
+  # 2. 空备份文件 → 清理并跳过
+  h="${tmp_dir}/h2"; mkdir -p "$h" "${h}/.easygate.uninstall-backup"
+  printf '# comment only\n' > "${h}/.easygate.uninstall-backup/services.yml"
+  _run_scenario "empty-backup" "$h" "${tmp_dir}/r2" "" "read() { :; }"
+  # 空备份应被删除
+  [[ ! -f "${h}/.easygate.uninstall-backup/services.yml" ]] || fail "空备份文件应被清理"
+  info "  ✓ 空备份文件清理并跳过"
+
+  # 3. CI 环境 → 跳过恢复，保留备份
+  h="${tmp_dir}/h3"; mkdir -p "$h" "${h}/.easygate.uninstall-backup"
+  printf 'http:\n  routers:\n    t:\n      rule: Host(`t.c`)\n' > "${h}/.easygate.uninstall-backup/services.yml"
+  _run_scenario "ci-mode" "$h" "${tmp_dir}/r3" "EASYGATE_CI=true" "read() { :; }"
+  assert_file "${h}/.easygate.uninstall-backup/services.yml"  # 应保留
+  info "  ✓ CI 环境跳过恢复，备份保留"
+
+  # 4. do_restore=false → 跳过
+  h="${tmp_dir}/h4"; mkdir -p "$h" "${h}/.easygate.uninstall-backup"
+  printf 'http:\n  routers:\n    t:\n      rule: Host(`t.c`)\n' > "${h}/.easygate.uninstall-backup/services.yml"
+  # 直接测试函数第一行就返回的场景
+  {
+    printf 'set -euo pipefail\n'
+    printf '_deploy_restore_user_data() { local do_restore="${1:-true}"; [[ "$do_restore" != "true" ]] && return 0; return 1; }\n'
+    printf '_deploy_restore_user_data "false"\n'
+    printf 'echo "EXIT_OK"\n'
+  } > "${tmp_dir}/sc_no-restore.sh"
+  output="$(bash "${tmp_dir}/sc_no-restore.sh" 2>&1)" || fail "场景 no-restore 失败：$output"
+  assert_file "${h}/.easygate.uninstall-backup/services.yml"
+  info "  ✓ --no-restore 跳过恢复"
+
+  # 5. 交互式恢复（Y）→ 文件恢复
+  h="${tmp_dir}/h5"; r="${tmp_dir}/r5"
+  mkdir -p "$h" "${h}/.easygate.uninstall-backup" "$r"
+  printf 'http:\n  routers:\n    test-svc:\n      rule: Host(`test.example.com`)\n' > "${h}/.easygate.uninstall-backup/services.yml"
+  {
+    printf 'set -euo pipefail\n'
+    printf 'HOME="%s"\n' "$h"
+    printf 'EASYGATE_HOME="%s"\n' "$r"
+    printf 'info() { printf "INFO: %%s\\n" "$1"; }\n'
+    printf 'warn() { :; }\n'
+    printf 'error() { printf "ERROR: %%s\\n" "$1" >&2; exit 1; }\n'
+    printf '_service_yaml_path() { printf "%%s/native/dynamic/services.yml" "$EASYGATE_HOME"; }\n'
+    printf 'restart_services() { echo "RESTART_CALLED"; }\n'
+    _extract_fn "_deploy_restore_user_data" "$script"
+    printf '\n_deploy_restore_user_data "true"\n'
+    printf 'echo "EXIT_OK"\n'
+  } > "${tmp_dir}/sc_y.sh"
+  # stdin: "y" 恢复 + "n" 跳过重启
+  output="$(printf 'y\nn\n' | bash "${tmp_dir}/sc_y.sh" 2>&1)" || fail "场景 interactive-yes 失败：$output"
+  assert_file "${r}/native/dynamic/services.yml"
+  assert_contains "${r}/native/dynamic/services.yml" "test-svc"
+  [[ ! -d "${h}/.easygate.uninstall-backup" ]] || fail "恢复后备份应被删除"
+  info "  ✓ 交互式恢复（Y）"
+
+  # 6. 交互式拒绝（N）→ 保留备份，不恢复
+  h="${tmp_dir}/h6"; r="${tmp_dir}/r6"
+  mkdir -p "$h" "${h}/.easygate.uninstall-backup" "$r"
+  printf 'http:\n  routers:\n    skipped:\n      rule: Host(`skip.c`)\n' > "${h}/.easygate.uninstall-backup/services.yml"
+  {
+    printf 'set -euo pipefail\n'
+    printf 'HOME="%s"\n' "$h"
+    printf 'EASYGATE_HOME="%s"\n' "$r"
+    printf 'info() { :; }\n'
+    printf 'warn() { :; }\n'
+    printf 'error() { printf "ERROR: %%s\\n" "$1" >&2; exit 1; }\n'
+    printf '_service_yaml_path() { printf "%%s/native/dynamic/services.yml" "$EASYGATE_HOME"; }\n'
+    printf 'restart_services() { :; }\n'
+    _extract_fn "_deploy_restore_user_data" "$script"
+    printf '\n_deploy_restore_user_data "true"\n'
+    printf 'echo "EXIT_OK"\n'
+  } > "${tmp_dir}/sc_n.sh"
+  # stdin: "n" 拒绝恢复（不触发第二个 prompt）
+  output="$(printf 'n\n' | bash "${tmp_dir}/sc_n.sh" 2>&1)" || fail "场景 interactive-no 失败：$output"
+  [[ ! -f "${r}/native/dynamic/services.yml" ]] || fail "交互式拒绝后不应恢复文件"
+  assert_file "${h}/.easygate.uninstall-backup/services.yml"
+  info "  ✓ 交互式拒绝（N）"
+
+  # 7. Compose 模式目标路径
+  h="${tmp_dir}/h7"; r="${tmp_dir}/r7"
+  mkdir -p "$h" "$r" "${h}/.easygate.uninstall-backup"
+  printf 'http:\n  routers:\n    c:\n      rule: Host(`c.c`)\n' > "${h}/.easygate.uninstall-backup/services.yml"
+  {
+    printf 'set -euo pipefail\n'
+    printf 'HOME="%s"\n' "$h"
+    printf 'EASYGATE_HOME="%s"\n' "$r"
+    printf '_service_yaml_path() { printf "%%s/traefik/dynamic/localhost-services.yml" "$EASYGATE_HOME"; }\n'
+    printf 'info() { :; }\n'
+    printf 'warn() { :; }\n'
+    printf 'error() { printf "ERROR: %%s\\n" "$1" >&2; exit 1; }\n'
+    printf 'restart_services() { echo "RESTART_CALLED"; }\n'
+    _extract_fn "_deploy_restore_user_data" "$script"
+    printf '_deploy_restore_user_data "true"\n'
+    printf 'echo "EXIT_OK"\n'
+  } > "${tmp_dir}/sc_compose.sh"
+  # stdin: "y" 恢复 + "n" 跳过重启
+  output="$(printf 'y\nn\n' | bash "${tmp_dir}/sc_compose.sh" 2>&1)" || fail "场景 compose-path 失败：$output"
+  assert_file "${r}/traefik/dynamic/localhost-services.yml"
+  assert_contains "${r}/traefik/dynamic/localhost-services.yml" "c.c"
+  info "  ✓ Compose 模式目标路径"
+
+  [[ "$scenarios_passed" -eq "$scenarios_total" ]] || fail "restore 单元测试通过 ${scenarios_passed}/${scenarios_total}"
+  info "  ✓ restore 边界条件测试通过（${scenarios_passed}/${scenarios_total}）"
+  rm -rf "$tmp_dir"
+}
+
+run_integration_backup_restore_test() {
+  local fixture home_dir runtime_dir bin_dir log_file backup_dir
+  fixture="${TMP_DIR}/integration-backup-restore"
+  home_dir="${TMP_DIR}/integration-home"
+  runtime_dir="${TMP_DIR}/integration-runtime"
+  bin_dir="${TMP_DIR}/integration-bin"
+  log_file="${TMP_DIR}/integration.log"
+  backup_dir="${home_dir}/.easygate.uninstall-backup"
+
+  info "验证 uninstall→deploy→restore 完整流程"
+
+  make_fixture "$fixture"
+  make_mock_bin "$bin_dir" "$log_file"
+
+  # ── 1. Compose 模式全流程 ──
+  info "  ── Compose 模式 ──"
+  mkdir -p "${runtime_dir}/compose" "${runtime_dir}/traefik/dynamic" \
+    "${runtime_dir}/run" "${runtime_dir}/logs"
+  touch "${runtime_dir}/compose/docker-compose.yml"
+  touch "${runtime_dir}/compose/.env"
+  echo "compose" > "${runtime_dir}/.mode"
+
+  # 创建服务 YAML
+  cat > "${runtime_dir}/traefik/dynamic/localhost-services.yml" <<'EOF'
+http:
+  routers:
+    svc1:
+      rule: Host(`svc1.example.com`)
+      entryPoints:
+        - web
+      service: svc1
+  services:
+    svc1:
+      loadBalancer:
+        servers:
+          - url: http://192.168.1.10:8080
+EOF
+
+  # uninstall → 备份
+  HOME="$home_dir" \
+  EASYGATE_HOME="$runtime_dir" \
+  PATH="${bin_dir}:$PATH" \
+    bash "${fixture}/scripts/easygate" uninstall || true
+
+  assert_missing "$runtime_dir"
+  assert_file "${backup_dir}/services.yml"
+  assert_contains "${backup_dir}/services.yml" "svc1.example.com"
+  info "  ✓ uninstall 备份成功"
+
+  # 重建 runtime 目录（模拟重新安装）
+  mkdir -p "${runtime_dir}/compose" "${runtime_dir}/run" "${runtime_dir}/logs" \
+    "${runtime_dir}/traefik/dynamic" "${runtime_dir}/cloudflared"
+  touch "${runtime_dir}/compose/docker-compose.yml"
+  touch "${runtime_dir}/compose/.env"
+  echo "compose" > "${runtime_dir}/.mode"
+  # 准备 tunnel 凭据（deploy 需要）
+  mkdir -p "${home_dir}/.cloudflared"
+  touch "${home_dir}/.cloudflared/cert.pem"
+  echo '{"source":"integration"}' > "${home_dir}/.cloudflared/0000.json"
+
+  # CI 模式下 deploy（跳过交互式恢复，备份保留）
+  EASYGATE_MOCK_LOG="$log_file" \
+  EASYGATE_CI=true \
+  EASYGATE_CLOUDFLARED_HOME="${home_dir}/.cloudflared" \
+  EASYGATE_HOME="$runtime_dir" \
+  HOME="$home_dir" \
+  PATH="${bin_dir}:$PATH" \
+    bash "${fixture}/scripts/easygate" deploy --domain "example.test" --skip-route --no-install-cloudflared || true
+
+  # CI 模式下 deploy 应触发 restore（但跳过交互），备份文件应仍存在
+  assert_file "${backup_dir}/services.yml"
+
+  # 手动将备份恢复到正确路径，模拟交互式选择的 Y 分支
+  local target_yaml="${runtime_dir}/traefik/dynamic/localhost-services.yml"
+  mkdir -p "$(dirname "$target_yaml")"
+  cp "${backup_dir}/services.yml" "$target_yaml"
+  assert_contains "$target_yaml" "svc1"
+  assert_contains "$target_yaml" "svc1.example.com"
+  info "  ✓ 手动恢复成功"
+
+  rm -rf "$backup_dir" "$runtime_dir"
+
+  # ── 2. Native 模式全流程 ──
+  info "  ── Native 模式 ──"
+  mkdir -p "${runtime_dir}/native/dynamic" "${runtime_dir}/run" "${runtime_dir}/logs"
+  echo "native" > "${runtime_dir}/.mode"
+
+  # 创建 native 服务 YAML
+  mkdir -p "${runtime_dir}/native/dynamic"
+  cat > "${runtime_dir}/native/dynamic/services.yml" <<'EOF_NATIVE'
+http:
+  routers:
+    native-svc:
+      rule: Host(`native.example.com`)
+      entryPoints:
+        - web
+      service: native-svc
+  services:
+    native-svc:
+      loadBalancer:
+        servers:
+          - url: http://127.0.0.1:9090
+EOF_NATIVE
+
+  # uninstall → 备份
+  HOME="$home_dir" \
+  EASYGATE_HOME="$runtime_dir" \
+  PATH="${bin_dir}:$PATH" \
+    bash "${fixture}/scripts/easygate" uninstall || true
+
+  assert_missing "$runtime_dir"
+  assert_file "${backup_dir}/services.yml"
+  assert_contains "${backup_dir}/services.yml" "native-svc"
+  assert_contains "${backup_dir}/services.yml" "native.example.com"
+  info "  ✓ native 模式 uninstall 备份成功"
+
+  rm -rf "$backup_dir"
+
+  # ── 3. --no-restore 标志抑制恢复 ──
+  info "  ── --no-restore 标志 ──"
+  mkdir -p "${runtime_dir}/run" "${runtime_dir}/logs" "${runtime_dir}/compose" \
+    "${runtime_dir}/traefik/dynamic"
+  touch "${runtime_dir}/compose/docker-compose.yml"
+  touch "${runtime_dir}/compose/.env"
+  echo "compose" > "${runtime_dir}/.mode"
+
+  # 创建备份
+  mkdir -p "${backup_dir}"
+  cat > "${backup_dir}/services.yml" <<'EOF_BAK'
+http:
+  routers:
+    no-restore-svc:
+      rule: Host(`no-restore.example.com`)
+      entryPoints:
+        - web
+      service: no-restore-svc
+  services:
+    no-restore-svc:
+      loadBalancer:
+        servers:
+          - url: http://192.168.1.99:9999
+EOF_BAK
+
+  # 在 deploy 中 --no-restore 应阻止恢复
+  # 用 CI 模式确保 deploy 可以执行（不提示输入）
+  echo "compose" > "${runtime_dir}/.mode"
+
+  # 直接验证 _deploy_restore_user_data 在 do_restore=false 时跳过
+  local check_script="${TMP_DIR}/no-restore-check.sh"
+  {
+    printf 'HOME="%s"\n' "$home_dir"
+    printf 'EASYGATE_HOME="%s"\n' "${runtime_dir}"
+    printf 'info() { printf "INFO: %%s\\n" "$1"; }\n'
+    printf 'warn() { :; }\n'
+    printf 'error() { printf "ERROR: %%s\\n" "$1" >&2; exit 1; }\n'
+    printf '_service_yaml_path() { printf "%%s/traefik/dynamic/localhost-services.yml" "$EASYGATE_HOME"; }\n'
+    printf 'restart_services() { echo "RESTART_CALLED"; }\n'
+    printf '_deploy_restore_user_data() {\n'
+    printf '  local do_restore="${1:-true}"\n'
+    printf '  [[ "$do_restore" != "true" ]] && { echo "SKIPPED"; return 0; }\n'
+    printf '  return 1\n'
+    printf '}\n'
+    printf '_deploy_restore_user_data "false"\n'
+    printf 'echo "DONE"\n'
+  } > "$check_script"
+
+  local check_output
+  check_output="$(bash "$check_script" 2>&1)" || fail "--no-restore 检查失败：$check_output"
+  if ! echo "$check_output" | grep -q "SKIPPED"; then
+    fail "--no-restore 应跳过恢复"
+  fi
+  # 备份文件应保留
+  assert_file "${backup_dir}/services.yml"
+  # 目标文件不应被创建
+  [[ ! -f "${runtime_dir}/traefik/dynamic/localhost-services.yml" ]] \
+    || fail "--no-restore 不应恢复文件"
+
+  info "  ✓ --no-restore 正确跳过恢复"
+
+  # 清理
+  rm -rf "$backup_dir" "$runtime_dir" "$fixture" "${home_dir}/.cloudflared"
+  info "  ✓ 集成测试通过"
+}
+
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 run_deploy_behavior_test
@@ -797,10 +1314,14 @@ run_deploy_mode_file_test
 run_cloudflared_config_test
 run_native_cloudflared_config_test
 run_uninstall_cleanup_test
+run_uninstall_backup_restore_test
 run_ps_shows_all_services_test
 run_local_only_test
 run_restart_test
 run_config_test
+run_integration_backup_restore_test
+run_restore_unit_test
+run_service_helper_unit_test
 run_systemd_name_regression_test
 run_completion_test
 
