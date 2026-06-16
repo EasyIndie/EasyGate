@@ -112,14 +112,14 @@ status="$(curl -sS -o /dev/null -w '%{http_code}' -H "Host: missing.example.com"
 [[ "$status" == "404" ]] || skip_or_fail "missing.example.com 预期 404，实际 ${status}"
 
 info "验证自定义服务路由（file provider + service-helper.py）"
-# 启用 file provider 以支持动态 YAML 配置
-cat >> traefik/traefik.yml <<'EOF_FILE'
-  file:
-    directory: /etc/traefik/dynamic
-    watch: true
-EOF_FILE
+# traefik/traefik.yml 已配置 file provider（directory: /etc/traefik/dynamic, watch: true）
+# 但 localhost-services.yml 是纯注释模板，service-helper.py 需要标准的 YAML 结构
+# 先写入空的 YAML 结构
+printf 'http:\n  routers: {}\n  services: {}\n' > "traefik/dynamic/localhost-services.yml"
+
+# 重启 Traefik 加载新的空配置
 if ! "${COMPOSE[@]}" up -d traefik; then
-  skip_or_fail "重启 Traefik 启用 file provider 失败"
+  skip_or_fail "重启 Traefik 加载空配置失败"
 fi
 sleep 2
 
@@ -142,11 +142,7 @@ python3 scripts/service-helper.py list "traefik/dynamic/localhost-services.yml" 
 
 info "自定义服务路由验收通过"
 
-# 清理
-python3 scripts/service-helper.py remove "traefik/dynamic/localhost-services.yml" "acceptance-test" 2>/dev/null || true
-# 恢复 traefik.yml（移除 file provider 块）
-head -n 5 traefik/traefik.yml > traefik/traefik.yml.tmp
-mv traefik/traefik.yml.tmp traefik/traefik.yml
-"${COMPOSE[@]}" up -d traefik >/dev/null 2>&1 || true
+# 清理：恢复 localhost-services.yml 为纯注释模板
+git checkout -- "traefik/dynamic/localhost-services.yml" 2>/dev/null || true
 
 info "本机路由验收通过"
