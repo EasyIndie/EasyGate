@@ -200,6 +200,6 @@ Docker Compose 模式默认应用以下安全措施：
 - `cap_drop: ALL` —— 移除所有 Linux capabilities（Traefik 保留 `NET_BIND_SERVICE`）
 - 资源限制 —— 每个容器有内存上限和预留值
 
-cloudflared 镜像固定为 `2026.5.2`（非 `:latest`）。
+cloudflared 镜像固定为 `2026.6.0`（非 `:latest`，版本号定义见 `scripts/versions.sh`）。
 
 Release 版本的 `install.sh` 内置 CLI 校验和，安装时自动验证文件完整性。

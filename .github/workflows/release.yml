@@ -40,6 +40,11 @@ jobs:
           cat >> dist/install.sh << EOF_VER
           printf '%s' '${TAG_NAME}' > "\${EASYGATE_HOME}/.version"
           EOF_VER
+          # 注入版本号：从 scripts/versions.sh 读取并替换 dist/easygate 中的 fallback 默认值
+          source scripts/versions.sh
+          sed -i "s/CLOUDFLARED_VERSION:-\${CLOUDFLARED_VERSION:-.*}/CLOUDFLARED_VERSION:-\${CLOUDFLARED_VERSION:-${CLOUDFLARED_VERSION}}/" dist/easygate
+          sed -i "s/TRAEFIK_VERSION:-\${TRAEFIK_VERSION:-.*}/TRAEFIK_VERSION:-\${TRAEFIK_VERSION:-${TRAEFIK_VERSION}}/" dist/easygate
+          sed -i "s/TRAEFIK_IMAGE_TAG:-\${TRAEFIK_IMAGE_TAG:-.*}/TRAEFIK_IMAGE_TAG:-\${TRAEFIK_IMAGE_TAG:-${TRAEFIK_IMAGE_TAG}}/" dist/easygate
           CHECKSUM=$(shasum -a 256 dist/easygate | awk '{print $1}')
           # 替换整行变量赋值，__SKIP__ 保留在条件判断中不被触及
           sed -i "s/^EASYGATE_CLI_CHECKSUM=.*/EASYGATE_CLI_CHECKSUM=\"${CHECKSUM}\"/" dist/install.sh
