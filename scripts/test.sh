@@ -4,6 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 
+# 加载版本号数据源
+source "${ROOT_DIR}/scripts/versions.sh"
+
 info() {
   printf '\033[1;34m[test]\033[0m %s\n' "$1"
 }
@@ -93,14 +96,34 @@ grep -q "cloudflared-darwin-" scripts/lib.sh || fail "lib.sh 缺少 macOS cloudf
 # Also verify the standalone CLI has its own copies:
 grep -q "cloudflared-linux-" scripts/easygate || fail "easygate CLI 缺少 Linux cloudflared 下载逻辑"
 grep -q "cloudflared-darwin-" scripts/easygate || fail "easygate CLI 缺少 macOS cloudflared 下载逻辑"
-# 回归检查：cloudflared 镜像版本已固定（非 :latest）
-grep -qE "cloudflared:[0-9]{4}\.[0-9]+" docker-compose.yml || fail "docker-compose.yml cloudflared 版本未固定"
-# 回归检查：CLI 内嵌的 cloudflared 镜像版本与 docker-compose.yml 一致
-_yml_version="$(grep -oE 'cloudflare/cloudflared:[0-9]{4}\.[0-9]+\.[0-9]+' docker-compose.yml | head -1 | cut -d: -f2)"
-_cli_version="$(grep -oE 'cloudflare/cloudflared:[0-9]{4}\.[0-9]+\.[0-9]+' scripts/easygate | head -1 | cut -d: -f2)"
-if [[ -n "$_yml_version" && -n "$_cli_version" && "$_yml_version" != "$_cli_version" ]]; then
-  fail "CLI 内嵌 cloudflared 版本 ${_cli_version} 与 docker-compose.yml ${_yml_version} 不一致"
-fi
+# ── 版本号一致性检查（单一数据源：scripts/versions.sh）───────────────
+info "检查版本号一致性"
+
+# docker-compose.yml 使用变量引用，校验 fallback 默认值与 versions.sh 一致
+grep -qE "CLOUDFLARED_VERSION:-${CLOUDFLARED_VERSION}" docker-compose.yml \
+  || fail "docker-compose.yml cloudflared 版本与 versions.sh 不一致"
+grep -qE "TRAEFIK_IMAGE_TAG:-${TRAEFIK_IMAGE_TAG}" docker-compose.yml \
+  || fail "docker-compose.yml traefik 镜像标签与 versions.sh 不一致"
+grep -qE "TRAEFIK_WHOAMI_TAG:-${TRAEFIK_WHOAMI_TAG}" docker-compose.yml \
+  || fail "docker-compose.yml whoami 标签与 versions.sh 不一致"
+
+# scripts/easygate 的内嵌默认值与 versions.sh 一致
+grep -q "CLOUDFLARED_VERSION=\"\${CLOUDFLARED_VERSION:-${CLOUDFLARED_VERSION}}" scripts/easygate \
+  || fail "easygate CLI cloudflared 版本与 versions.sh 不一致"
+grep -q "TRAEFIK_VERSION=\"\${TRAEFIK_VERSION:-${TRAEFIK_VERSION}}" scripts/easygate \
+  || fail "easygate CLI traefik 版本与 versions.sh 不一致"
+grep -q "TRAEFIK_IMAGE_TAG=\"\${TRAEFIK_IMAGE_TAG:-${TRAEFIK_IMAGE_TAG}}" scripts/easygate \
+  || fail "easygate CLI traefik 镜像标签与 versions.sh 不一致"
+
+# .env.example 与 versions.sh 一致
+grep -q "^CLOUDFLARED_VERSION=${CLOUDFLARED_VERSION}$" .env.example \
+  || fail ".env.example cloudflared 版本与 versions.sh 不一致"
+grep -q "^TRAEFIK_IMAGE_TAG=${TRAEFIK_IMAGE_TAG}$" .env.example \
+  || fail ".env.example traefik 镜像标签与 versions.sh 不一致"
+grep -q "^TRAEFIK_VERSION=${TRAEFIK_VERSION}$" .env.example \
+  || fail ".env.example traefik 版本与 versions.sh 不一致"
+grep -q "^TRAEFIK_WHOAMI_TAG=${TRAEFIK_WHOAMI_TAG}$" .env.example \
+  || fail ".env.example whoami 标签与 versions.sh 不一致"
 # 回归检查：install.sh 不自依赖 lib.sh（curl | bash 模式无文件系统上下文）
 if grep -q "source.*lib.sh" scripts/install.sh; then
   fail "install.sh 不可依赖 lib.sh（curl | bash 管道模式无文件系统上下文）"

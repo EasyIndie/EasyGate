@@ -1,6 +1,6 @@
 services:
   traefik:
-    image: traefik:v3.1
+    image: traefik:${TRAEFIK_IMAGE_TAG:-v3.1}
     container_name: easygate-traefik
     restart: unless-stopped
     command:
@@ -36,7 +36,7 @@ services:
           memory: 32M
 
   cloudflared:
-    image: cloudflare/cloudflared:2026.6.0
+    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-2026.6.0}
     container_name: easygate-cloudflared
     restart: unless-stopped
     command: tunnel --config /etc/cloudflared/config.yml run
@@ -57,7 +57,7 @@ services:
           memory: 16M
 
   demo-api:
-    image: traefik/whoami:v1.10
+    image: traefik/whoami:${TRAEFIK_WHOAMI_TAG:-v1.10}
     profiles: ["demo"]
     restart: unless-stopped
     networks:
@@ -79,7 +79,7 @@ services:
           memory: 8M
 
   demo-test-api:
-    image: traefik/whoami:v1.10
+    image: traefik/whoami:${TRAEFIK_WHOAMI_TAG:-v1.10}
     profiles: ["demo"]
     restart: unless-stopped
     networks:

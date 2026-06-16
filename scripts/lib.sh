@@ -4,6 +4,12 @@
 #   EASYGATE_LIB_TAG   – log prefix (default: easygate)
 #   EASYGATE_HOME      – runtime directory (auto-detected if unset)
 
+# 加载版本号（单一数据源）
+_scripts_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "${_scripts_dir}/versions.sh" ]]; then
+  source "${_scripts_dir}/versions.sh"
+fi
+
 # ── Logging ───────────────────────────────────────────────────────────
 
 info() {
@@ -159,7 +165,7 @@ install_cloudflared() {
 #   version:         defaults to EASYGATE_TRAEFIK_VERSION or 3.1.7
 install_traefik() {
   local should_install="${1:-true}"
-  local traefik_version="${2:-${EASYGATE_TRAEFIK_VERSION:-3.1.7}}"
+  local traefik_version="${2:-${EASYGATE_TRAEFIK_VERSION:-${TRAEFIK_VERSION:-3.1.7}}}"
 
   if command -v traefik >/dev/null 2>&1; then
     info "已找到 traefik：$(command -v traefik)"

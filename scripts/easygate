@@ -30,6 +30,20 @@ elif [[ -f "${EASYGATE_HOME}/.version" ]]; then
 else
   VERSION="dev"
 fi
+
+# ── Version definitions (single source of truth: scripts/versions.sh) ──
+# When running from the repo, source versions.sh directly.
+# When installed standalone, these embedded defaults serve as fallback.
+# Release workflow injects the canonical versions at build time.
+_versions_self="$(cd "$(dirname "$0")" && pwd)/versions.sh"
+if [[ -f "$_versions_self" ]]; then
+  source "$_versions_self"
+fi
+CLOUDFLARED_VERSION="${CLOUDFLARED_VERSION:-2026.6.0}"
+TRAEFIK_VERSION="${TRAEFIK_VERSION:-3.1.7}"
+TRAEFIK_IMAGE_TAG="${TRAEFIK_IMAGE_TAG:-v3.1}"
+TRAEFIK_WHOAMI_TAG="${TRAEFIK_WHOAMI_TAG:-v1.10}"
+
 CLOUDFLARED_HOME="${EASYGATE_CLOUDFLARED_HOME:-${HOME}/.cloudflared}"
 COMPOSE_DIR="${EASYGATE_HOME}/compose"
 COMPOSE_FILE="${COMPOSE_DIR}/docker-compose.yml"
@@ -297,7 +311,7 @@ install_cloudflared() {
 
 install_traefik() {
   local install_traefik="$1"
-  local traefik_version="${EASYGATE_TRAEFIK_VERSION:-3.1.7}"
+  local traefik_version="${EASYGATE_TRAEFIK_VERSION:-${TRAEFIK_VERSION}}"
 
   if command -v traefik >/dev/null 2>&1; then
     info "已找到 traefik：$(command -v traefik)"
@@ -471,12 +485,12 @@ write_compose_file() {
   local base_domain="$1"
   local dashboard_host="$2"
   local traefik_http_port="$3"
-  local cloudflared_image="${EASYGATE_CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2026.6.0}"
+  local cloudflared_image="${EASYGATE_CLOUDFLARED_IMAGE:-cloudflare/cloudflared:${CLOUDFLARED_VERSION}}"
 
   cat > "$COMPOSE_FILE" <<EOF_COMPOSE
 services:
   traefik:
-    image: traefik:v3.1
+    image: traefik:${TRAEFIK_IMAGE_TAG}
     container_name: easygate-traefik
     restart: unless-stopped
     command:
