@@ -95,4 +95,27 @@ info "验证未配置域名返回 404"
 status="$(curl -sS -o /dev/null -w '%{http_code}' -H "Host: missing.example.com" "http://127.0.0.1:${TRAEFIK_HTTP_PORT}")"
 [[ "$status" == "404" ]] || skip_or_fail "missing.example.com 预期 404，实际 ${status}"
 
+info "验证自定义服务路由（native 模式 file provider）"
+# 使用 easygate CLI 添加自定义服务
+if ! "$EASYGATE_CLI" service add --name acceptance-native-test \
+  --host custom.native.example.com \
+  --url "http://127.0.0.1:${EASYGATE_NATIVE_API_PORT:-19080}" 2>/dev/null; then
+  skip_or_fail "添加自定义服务失败"
+fi
+
+sleep 2  # 等待 Traefik 热加载
+
+# 验证自定义路由
+request "custom.native.example.com" | grep -q "Hostname:" \
+  || skip_or_fail "custom.native.example.com 未返回响应"
+
+# 验证 service list
+"$EASYGATE_CLI" service list 2>&1 | grep -q "acceptance-native-test" \
+  || fail "service list 未包含 acceptance-native-test"
+
+info "自定义服务路由验收通过"
+
+# 清理自定义服务
+"$EASYGATE_CLI" service remove "acceptance-native-test" 2>/dev/null || true
+
 info "原生本机路由验收通过"

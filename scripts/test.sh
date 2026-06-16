@@ -163,6 +163,14 @@ done < <(perl -ne 'while (/\[[^\]]+\]\(([^)]+)\)/g) { print "$ARGV\t$1\n" }' REA
 info "运行 Bash 行为测试"
 bash scripts/behavior-test.sh
 
+if command -v python3 >/dev/null 2>&1; then
+  info "检查 service-helper.py 语法"
+  python3 -c "import py_compile; py_compile.compile('scripts/service-helper.py', doraise=True)" \
+    || fail "service-helper.py 语法错误"
+else
+  warn "未找到 python3，跳过 service-helper.py 语法检查"
+fi
+
 if command -v ruby >/dev/null 2>&1; then
   info "使用 Ruby 检查 YAML 语法"
   ruby -e 'require "yaml"; ARGV.each { |f| YAML.load_file(f); puts "ok #{f}" }' \

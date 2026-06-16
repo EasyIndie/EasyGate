@@ -111,4 +111,42 @@ info "验证未配置域名返回 404"
 status="$(curl -sS -o /dev/null -w '%{http_code}' -H "Host: missing.example.com" "http://127.0.0.1:${TRAEFIK_HTTP_PORT}")"
 [[ "$status" == "404" ]] || skip_or_fail "missing.example.com 预期 404，实际 ${status}"
 
+info "验证自定义服务路由（file provider + service-helper.py）"
+# 启用 file provider 以支持动态 YAML 配置
+cat >> traefik/traefik.yml <<'EOF_FILE'
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+EOF_FILE
+if ! "${COMPOSE[@]}" up -d traefik; then
+  skip_or_fail "重启 Traefik 启用 file provider 失败"
+fi
+sleep 2
+
+# 通过 service-helper.py 添加自定义服务
+python3 scripts/service-helper.py add \
+  "traefik/dynamic/localhost-services.yml" \
+  "acceptance-test" \
+  "custom.docker.example.com" \
+  "http://demo-api:80" || skip_or_fail "添加自定义服务失败"
+
+sleep 2  # 等待 Traefik 热加载 file provider 配置
+
+# 验证自定义路由
+request "custom.docker.example.com" | grep -q "Hostname:" \
+  || skip_or_fail "custom.docker.example.com 未返回响应"
+
+# 验证 service list
+python3 scripts/service-helper.py list "traefik/dynamic/localhost-services.yml" | grep -q "acceptance-test" \
+  || fail "service list 未包含 acceptance-test"
+
+info "自定义服务路由验收通过"
+
+# 清理
+python3 scripts/service-helper.py remove "traefik/dynamic/localhost-services.yml" "acceptance-test" 2>/dev/null || true
+# 恢复 traefik.yml（移除 file provider 块）
+head -n 5 traefik/traefik.yml > traefik/traefik.yml.tmp
+mv traefik/traefik.yml.tmp traefik/traefik.yml
+"${COMPOSE[@]}" up -d traefik >/dev/null 2>&1 || true
+
 info "本机路由验收通过"

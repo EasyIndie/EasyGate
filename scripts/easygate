@@ -645,7 +645,7 @@ assert_no_compose_deployment() {
 
 deploy_compose() {
   local base_domain="" tunnel_name="easygate-home" dashboard_host="" traefik_http_port="18080"
-  local route_dns=true start_demo=false install_cloudflared=true
+  local route_dns=true start_demo=false install_cloudflared=true restore_services=true
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -656,6 +656,7 @@ deploy_compose() {
       --skip-route) route_dns=false ;;
       --demo) start_demo=true ;;
       --no-install-cloudflared) install_cloudflared=false ;;
+      --no-restore) restore_services=false ;;
       -h|--help) usage; exit 0 ;;
       *) error "未知参数：$1"; usage; exit 1 ;;
     esac
@@ -750,6 +751,9 @@ EOF_CONFIG
   printf '  本地调试入口：http://127.0.0.1:%s\n' "$traefik_http_port"
   printf '  https://api.%s\n' "$base_domain"
   printf '  https://test-api.%s\n' "$base_domain"
+
+  # 检测并恢复之前备份的自定义服务
+  _deploy_restore_user_data "$restore_services"
 }
 
 # Check if a TCP port is already in use on localhost.
@@ -1048,7 +1052,7 @@ EOF_PY
 deploy_native() {
   local base_domain="" tunnel_name="easygate-home" dashboard_host="" traefik_http_port="18080"
   local native_api_port="${EASYGATE_NATIVE_API_PORT:-19080}" native_test_api_port="${EASYGATE_NATIVE_TEST_API_PORT:-19081}"
-  local route_dns=true start_demo=false local_only=false install_cloudflared=true install_traefik=true
+  local route_dns=true start_demo=false local_only=false install_cloudflared=true install_traefik=true restore_services=true
   local _started_pids=()
 
   # Clean up any started processes if the deployment is interrupted.
@@ -1073,6 +1077,7 @@ deploy_native() {
       --local-only) local_only=true; route_dns=false ;;
       --no-install-cloudflared) install_cloudflared=false ;;
       --no-install-traefik) install_traefik=false ;;
+      --no-restore) restore_services=false ;;
       -h|--help) usage; exit 0 ;;
       *) error "未知参数：$1"; usage; exit 1 ;;
     esac
@@ -1262,6 +1267,94 @@ EOF_CLOUDFLARED
   printf '\n后续检查：\n'
   printf '  easygate logs\n'
   printf '  运行时目录：%s\n' "$EASYGATE_HOME"
+
+  # 检测并恢复之前备份的自定义服务
+  _deploy_restore_user_data "$restore_services"
+}
+
+# ── Uninstall backup / deploy restore ───────────────────────────────
+
+# 卸载前备份用户自定义服务配置到 EASYGATE_HOME 之外的安全位置
+_uninstall_backup_user_data() {
+  local backup_dir="${HOME}/.easygate.uninstall-backup"
+  local mode services_path
+
+  mode="$(detect_mode)" 2>/dev/null || true
+  case "$mode" in
+    compose) services_path="${EASYGATE_HOME}/traefik/dynamic/localhost-services.yml" ;;
+    native)  services_path="${EASYGATE_HOME}/native/dynamic/services.yml" ;;
+    *) return 0 ;;  # 无法确定模式，跳过备份
+  esac
+
+  # 检查服务配置文件是否有实际自定义条目（非空、非纯注释）
+  if [[ ! -f "$services_path" ]] || ! grep -qE '^\s+routers:' "$services_path" 2>/dev/null; then
+    return 0
+  fi
+
+  mkdir -p "$backup_dir"
+  cp "$services_path" "${backup_dir}/services.yml"
+
+  # 备份 .env 文件供参考
+  [[ -f "${EASYGATE_HOME}/compose/.env" ]] && cp "${EASYGATE_HOME}/compose/.env" "${backup_dir}/compose.env" 2>/dev/null || true
+  [[ -f "${EASYGATE_HOME}/native/.env" ]] && cp "${EASYGATE_HOME}/native/.env" "${backup_dir}/native.env" 2>/dev/null || true
+
+  info "已备份自定义服务配置到 ${backup_dir}"
+  info "重新安装后执行 easygate deploy 可选择恢复"
+}
+
+# deploy 完成后检测并恢复之前备份的自定义服务
+_deploy_restore_user_data() {
+  local do_restore="${1:-true}"
+  [[ "$do_restore" != "true" ]] && return 0
+
+  local backup_dir="${HOME}/.easygate.uninstall-backup"
+  local backup_file="${backup_dir}/services.yml"
+
+  # 无备份时跳过
+  [[ ! -f "$backup_file" ]] && return 0
+  # 备份中没有实际服务条目时清理并跳过
+  if ! grep -qE '^\s+routers:' "$backup_file" 2>/dev/null; then
+    rm -rf "$backup_dir"
+    return 0
+  fi
+
+  # CI 环境自动跳过
+  if [[ "${EASYGATE_CI:-}" == "true" ]]; then
+    info "CI 环境，跳过自定义服务恢复（备份保留在 ${backup_dir}）"
+    return 0
+  fi
+
+  local yaml_path
+  yaml_path="$(_service_yaml_path)" 2>/dev/null || return 1
+
+  local answer
+  printf '\n'
+  info "检测到之前的卸载备份，是否恢复自定义服务配置？"
+  read -r -p "  恢复后自定义路由将立即生效 [Y/n] " answer
+  case "${answer:-Y}" in
+    n*|N*)
+      info "已跳过恢复。备份保留在 ${backup_dir}，可手动恢复："
+      info "  cp ${backup_file} ${yaml_path}"
+      return 0
+      ;;
+  esac
+
+  mkdir -p "$(dirname "$yaml_path")"
+  cp "$backup_file" "$yaml_path"
+  rm -rf "$backup_dir"
+  info "自定义服务配置已恢复"
+
+  # 询问是否重启
+  local answer2
+  info "是否立即重启 EasyGate 以加载恢复的配置？"
+  read -r -p "  重启期间服务会短暂中断 [Y/n] " answer2
+  case "${answer2:-Y}" in
+    n*|N*) info "已跳过重启。需要时执行：easygate restart" ;;
+    *)
+      info "正在重启..."
+      restart_services 2>/dev/null || true
+      ;;
+  esac
 }
 
 # ── Service management helpers ───────────────────────────────────────
@@ -1954,6 +2047,9 @@ case "$cmd" in
         info "已从 ${rc} 移除 EasyGate 配置"
       fi
     done
+    # 卸载前备份自定义服务配置
+    _uninstall_backup_user_data
+
     if [[ -e "$EASYGATE_HOME" ]]; then
       rm -rf "$EASYGATE_HOME"
       info "已删除运行时目录 ${EASYGATE_HOME}"
