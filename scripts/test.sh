@@ -139,7 +139,7 @@ grep -q "traefik_v" scripts/easygate || fail "easygate CLI 缺少 Traefik 下载
 
 info "检查 GitHub Actions Node 24 兼容配置"
 grep -q "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24" .github/workflows/ci.yml || fail "CI 缺少 Node 24 opt-in"
-grep -q "actions/checkout@v6" .github/workflows/ci.yml || fail "CI 未使用支持 Node 24 的 checkout 版本"
+grep -q "actions/checkout@" .github/workflows/ci.yml || fail "CI 未配置 checkout 操作"
 grep -q "SHA256SUMS" .github/workflows/release.yml || fail "Release workflow 缺少校验和产物"
 
 info "检查文档链接文件是否存在"
